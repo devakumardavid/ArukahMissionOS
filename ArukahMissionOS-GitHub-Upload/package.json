@@ -1,0 +1,16 @@
+{
+  "name": "arukah-missionos",
+  "private": true,
+  "packageManager": "pnpm@11.0.7",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @arukah/web --filter @arukah/api dev",
+    "dev:web": "pnpm --filter @arukah/web dev",
+    "dev:api": "pnpm --filter @arukah/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "db:generate": "pnpm --filter @arukah/database generate",
+    "db:migrate": "pnpm --filter @arukah/database migrate",
+    "db:studio": "pnpm --filter @arukah/database studio"
+  }
+}

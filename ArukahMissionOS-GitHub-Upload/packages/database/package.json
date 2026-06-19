@@ -1,0 +1,23 @@
+{
+  "name": "@arukah/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "latest",
+    "dotenv": "latest"
+  },
+  "devDependencies": {
+    "prisma": "latest",
+    "typescript": "latest"
+  }
+}

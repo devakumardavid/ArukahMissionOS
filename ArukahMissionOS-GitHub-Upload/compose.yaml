@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: arukah_missionos
+      POSTGRES_USER: arukah
+      POSTGRES_PASSWORD: arukah
+    ports:
+      - "5432:5432"
+    volumes:
+      - arukah_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arukah -d arukah_missionos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  arukah_postgres:

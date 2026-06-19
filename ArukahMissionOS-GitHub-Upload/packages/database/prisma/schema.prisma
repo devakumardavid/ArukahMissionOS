@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TenantType {
+  ARUKAH
+  CHURCH
+  NGO
+  FAMILY_FOUNDATION
+  CSR
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum TenantRole {
+  SUPER_ADMIN
+  CASE_MANAGER
+  VERIFIER
+  FINANCE_MANAGER
+  DONOR
+}
+
+enum BeneficiaryStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CaseStage {
+  SUBMITTED
+  VERIFICATION
+  APPROVED
+  PROVIDER_SELECTION
+  PAYMENT
+  IMPACT
+  CLOSED
+  REJECTED
+  ON_HOLD
+}
+
+enum Urgency {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  TRANSITIONED
+  APPROVED
+  REJECTED
+  VIEWED
+  EXPORTED
+  LOGIN
+  LOGOUT
+  TENANT_SWITCHED
+}
+
+model User {
+  id           String             @id @default(uuid()) @db.Uuid
+  auth0Subject String             @unique
+  email        String             @unique
+  displayName  String
+  phone        String?
+  active       Boolean            @default(true)
+  memberships TenantMembership[]
+  auditEvents  AuditEvent[]       @relation("AuditActor")
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model Tenant {
+  id                String             @id @default(uuid()) @db.Uuid
+  slug              String             @unique
+  type              TenantType
+  status            TenantStatus       @default(ACTIVE)
+  name              String
+  shortName         String
+  primaryColor      String             @default("#0d766d")
+  accentColor       String             @default("#e3a72f")
+  caseTerm          String             @default("Case")
+  missionTerm       String             @default("Mission")
+  approvalThreshold BigInt?
+  memberships       TenantMembership[]
+  beneficiaries     Beneficiary[]
+  cases             Case[]
+  auditEvents       AuditEvent[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model TenantMembership {
+  id        String           @id @default(uuid()) @db.Uuid
+  tenantId  String           @db.Uuid
+  userId    String           @db.Uuid
+  role      TenantRole
+  status    MembershipStatus @default(INVITED)
+  invitedAt DateTime         @default(now())
+  joinedAt  DateTime?
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId, status])
+}
+
+model Beneficiary {
+  id            String            @id @default(uuid()) @db.Uuid
+  tenantId      String            @db.Uuid
+  referenceCode String
+  legalName     String
+  preferredName String
+  email         String?
+  phone         String?
+  city          String
+  region        String
+  country       String            @default("IN") @db.Char(2)
+  status        BeneficiaryStatus @default(ACTIVE)
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cases         Case[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([tenantId, referenceCode])
+  @@index([tenantId, preferredName])
+  @@index([tenantId, phone])
+}
+
+model Case {
+  id                   String           @id @default(uuid()) @db.Uuid
+  tenantId             String           @db.Uuid
+  beneficiaryId        String           @db.Uuid
+  caseNumber           String
+  title                String
+  category             String
+  description          String
+  requestedAmountMinor BigInt
+  approvedAmountMinor  BigInt?
+  currency             String           @default("INR") @db.Char(3)
+  urgency              Urgency          @default(NORMAL)
+  stage                CaseStage        @default(SUBMITTED)
+  caseManagerId        String?          @db.Uuid
+  verifierId           String?          @db.Uuid
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  beneficiary          Beneficiary      @relation(fields: [beneficiaryId], references: [id], onDelete: Restrict)
+  transitions          CaseTransition[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  closedAt             DateTime?
+
+  @@unique([tenantId, caseNumber])
+  @@index([tenantId, stage])
+  @@index([tenantId, beneficiaryId])
+  @@index([tenantId, caseManagerId])
+  @@index([tenantId, verifierId])
+}
+
+model CaseTransition {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  caseId      String    @db.Uuid
+  fromStage   CaseStage?
+  toStage     CaseStage
+  actorUserId String    @db.Uuid
+  reason      String?
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, caseId, createdAt])
+}
+
+model AuditEvent {
+  id          String      @id @default(uuid()) @db.Uuid
+  tenantId    String      @db.Uuid
+  actorUserId String?     @db.Uuid
+  action      AuditAction
+  entityType  String
+  entityId    String
+  summary     Json?
+  requestId   String?
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor       User?       @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+}

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0d766d">
+  <meta name="description" content="Arukah Case Management Platform — internal operations for verified assistance cases.">
+  <title>Arukah Case Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="index.html" aria-label="Arukah public website">
+        <span class="brand-mark">AM</span>
+        <span>
+          <strong>Arukah</strong>
+          <small>Case Management</small>
+        </span>
+      </a>
+
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-item active internal-nav" data-view="dashboard"><span>⌂</span> Dashboard</button>
+        <button class="nav-item internal-nav" data-view="missions"><span>◈</span> Causes & cases <b id="mission-count-badge">0</b></button>
+        <button class="nav-item internal-nav" data-view="verification" data-permission="verify"><span>⌕</span> Verification</button>
+        <button class="nav-item internal-nav" data-view="providers" data-permission="provider"><span>⌘</span> Providers</button>
+        <button class="nav-item internal-nav" data-view="payments" data-permission="pay"><span>₹</span> Payments</button>
+        <button class="nav-item internal-nav" data-view="impact" data-permission="impact"><span>✦</span> Impact</button>
+        <button class="nav-item internal-nav" data-view="reports" data-permission="export"><span>▥</span> Reports</button>
+        <button class="nav-item internal-nav admin-only" data-view="roles"><span>♙</span> Users & access</button>
+        <button class="nav-item donor-nav" data-view="donor-home" hidden><span>⌂</span> Donor portal</button>
+        <button class="nav-item donor-nav" data-view="donor-missions" hidden><span>◎</span> My missions</button>
+        <button class="nav-item donor-nav" data-view="marketplace" hidden><span>◇</span> Cause marketplace</button>
+        <button class="nav-item donor-nav" data-view="recommendations" hidden><span>✦</span> Recommendations</button>
+        <button class="nav-item donor-nav" data-view="donor-impact" hidden><span>▥</span> Impact reports</button>
+        <button class="nav-item tenant-nav" data-view="tenant-overview"><span>▦</span> Organization</button>
+        <button class="nav-item tenant-nav" data-view="tenant-programs"><span>◎</span> Programs</button>
+        <button class="nav-item tenant-nav admin-only" data-view="tenant-members"><span>♙</span> Team & governance</button>
+        <button class="nav-item tenant-nav admin-only" data-view="white-label"><span>◐</span> Brand studio</button>
+      </nav>
+
+      <div class="sidebar-card">
+        <span class="eyebrow">Pilot objective</span>
+        <strong>Prove the workflow.<br>Earn the trust.</strong>
+        <p>50–100 real cases before marketplace expansion.</p>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="avatar" id="user-avatar">DA</div>
+        <label class="role-switcher">
+          <span id="user-name">David</span>
+          <select id="role-select" aria-label="Preview application as role"></select>
+          <select id="tenant-select" aria-label="Select organization"></select>
+        </label>
+        <button class="icon-button admin-only" id="settings-button" aria-label="Open settings">⋯</button>
+      </div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar">
+        <button class="menu-button" id="menu-button" aria-label="Toggle menu">☰</button>
+        <div class="search-wrap">
+          <span>⌕</span>
+          <input id="global-search" type="search" placeholder="Search cases, people, providers…" aria-label="Search">
+          <kbd>⌘ K</kbd>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-button notification-button" aria-label="Notifications">♢<i></i></button>
+          <button class="button primary" id="new-mission-button"><span>＋</span> New case</button>
+        </div>
+      </header>
+
+      <main id="main-content"></main>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="mission-drawer" id="mission-drawer" aria-label="Case details" aria-hidden="true"></aside>
+
+  <dialog id="mission-dialog">
+    <form method="dialog" id="mission-form">
+      <div class="dialog-header">
+        <div>
+          <span class="eyebrow">Begin with clarity</span>
+          <h2>Create a case</h2>
+          <p>Capture the submitted need for internal review.</p>
+        </div>
+        <button type="button" class="close-button" data-close-dialog aria-label="Close">×</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="span-2">Case title
+          <input name="title" required placeholder="e.g. School fees for Anjali">
+        </label>
+        <label>Category
+          <select name="category" required>
+            <option>Education</option>
+            <option>Health & Healing</option>
+            <option>Special Needs</option>
+            <option>Livelihood</option>
+            <option>Women Rise</option>
+            <option>Elder Care</option>
+            <option>Emergency Relief</option>
+            <option>Community</option>
+          </select>
+        </label>
+        <label>Urgency
+          <select name="urgency" required>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </label>
+        <label>Beneficiary
+          <input name="beneficiary" required placeholder="Person or family">
+        </label>
+        <label>Location
+          <input name="location" required placeholder="City, State">
+        </label>
+        <label>Amount needed (₹)
+          <input name="amount" type="number" min="1" required placeholder="25000">
+        </label>
+        <label>Target date
+          <input name="targetDate" type="date" required>
+        </label>
+        <label class="span-2">Need summary
+          <textarea name="summary" rows="4" required placeholder="What is needed, why it matters, and what a successful outcome looks like."></textarea>
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="button secondary" data-close-dialog>Cancel</button>
+        <button class="button primary" type="submit">Create case</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="donor-mission-dialog">
+    <form method="dialog" id="donor-mission-form">
+      <div class="dialog-header">
+        <div>
+          <span class="eyebrow">Give with intention</span>
+          <h2>Create a mission</h2>
+          <p>Set a budget and the causes your mission exists to support.</p>
+        </div>
+        <button type="button" class="close-button" data-close-donor-dialog aria-label="Close">×</button>
+      </div>
+      <div class="form-grid">
+        <label class="span-2">Mission name
+          <input name="name" required placeholder="e.g. Family Education Mission">
+        </label>
+        <label>Annual budget (₹)
+          <input name="budget" type="number" min="1000" required placeholder="100000">
+        </label>
+        <label>Geography
+          <input name="geography" required placeholder="Tamil Nadu">
+        </label>
+        <label class="span-2">Focus categories
+          <select name="categories" multiple size="5" required>
+            <option>Education</option>
+            <option>Health & Healing</option>
+            <option>Special Needs</option>
+            <option>Livelihood</option>
+            <option>Elder Care</option>
+          </select>
+        </label>
+        <label class="span-2">Mission goal
+          <textarea name="goal" rows="3" required placeholder="What change do you want this mission to make?"></textarea>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="button secondary" data-close-donor-dialog>Cancel</button>
+        <button class="button primary" type="submit">Create mission</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
