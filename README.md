@@ -39,11 +39,21 @@ pnpm dev:api
 - NestJS health: `http://localhost:4000/api/health`
 - NestJS readiness: `http://localhost:4000/api/health/ready`
 - Swagger: `http://localhost:4000/api/docs`
+- Public website prototype: `http://localhost:8080`
 
 PostgreSQL is described in `compose.yaml`. Docker or another PostgreSQL 17 installation is required before running migrations.
 Copy `.env.example` to `.env` before starting the API. The liveness endpoint remains
 available without PostgreSQL; the readiness endpoint returns `503` until the database
 is configured and reachable.
+
+### Website and application links
+
+- The Next.js app reads `NEXT_PUBLIC_ARUKAH_WEBSITE_URL` to link back to the
+  public Arukah website.
+- The static public website reads `prototype/config.js` to find the MissionOS
+  application URL.
+- Local defaults connect `http://localhost:8080` and `http://localhost:3000`.
+  Replace both values with the deployed website and app domains in production.
 
 ## Prototype
 

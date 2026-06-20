@@ -36,6 +36,9 @@ const roleDescriptions: Record<Role, string> = {
   "Finance Manager": "Payments and reconciliation"
 };
 
+const publicWebsiteUrl =
+  process.env.NEXT_PUBLIC_ARUKAH_WEBSITE_URL ?? "http://localhost:8080";
+
 export default function HomePage() {
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [role, setRole] = useState<Role>("Case Manager");
@@ -83,6 +86,12 @@ export default function HomePage() {
               {item.badge ? <b>{item.badge}</b> : null}
             </button>
           ))}
+          <span className="nav-label nav-label-secondary">Arukah</span>
+          <a className="nav-item nav-external" href={publicWebsiteUrl}>
+            <Icon name="globe" />
+            <span>Public website</span>
+            <Icon name="external" />
+          </a>
         </nav>
 
         <div className="pilot-card">
@@ -346,7 +355,7 @@ function Activity({ initials, text, time }: { initials: string; text: React.Reac
   return <div className="activity-item"><div className="activity-avatar">{initials}</div><div><p>{text}</p><span>{time}</span></div></div>;
 }
 
-type IconName = "grid" | "people" | "folder" | "verify" | "payment" | "report" | "dots" | "menu" | "search" | "bell" | "plus" | "complete" | "impact" | "arrow" | "chevron" | "filter" | "pin" | "clock";
+type IconName = "grid" | "people" | "folder" | "verify" | "payment" | "report" | "dots" | "menu" | "search" | "bell" | "plus" | "complete" | "impact" | "arrow" | "chevron" | "filter" | "pin" | "clock" | "globe" | "external";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -367,7 +376,9 @@ function Icon({ name }: { name: IconName }) {
     chevron: <path d="m9 18 6-6-6-6" />,
     filter: <path d="M4 5h16M7 12h10M10 19h4" />,
     pin: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2" /></>,
-    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
+    external: <><path d="M14 5h5v5M10 14 19 5" /><path d="M19 14v5H5V5h5" /></>
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
