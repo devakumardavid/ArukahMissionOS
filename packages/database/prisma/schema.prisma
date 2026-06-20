@@ -1,38 +1,18 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-enum TenantType {
-  ARUKAH
-  CHURCH
-  NGO
-  FAMILY_FOUNDATION
-  CSR
-}
-
-enum TenantStatus {
-  ACTIVE
-  SUSPENDED
-  ARCHIVED
-}
-
-enum MembershipStatus {
-  INVITED
-  ACTIVE
-  SUSPENDED
-}
-
-enum TenantRole {
+enum StaffRole {
   SUPER_ADMIN
   CASE_MANAGER
   VERIFIER
   FINANCE_MANAGER
-  DONOR
 }
 
 enum BeneficiaryStatus {
@@ -74,57 +54,24 @@ enum AuditAction {
 }
 
 model User {
-  id           String             @id @default(uuid()) @db.Uuid
-  auth0Subject String             @unique
-  email        String             @unique
+  id           String            @id @default(uuid()) @db.Uuid
+  authSubject  String            @unique
+  email        String            @unique
   displayName  String
   phone        String?
-  active       Boolean            @default(true)
-  memberships TenantMembership[]
-  auditEvents  AuditEvent[]       @relation("AuditActor")
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-}
-
-model Tenant {
-  id                String             @id @default(uuid()) @db.Uuid
-  slug              String             @unique
-  type              TenantType
-  status            TenantStatus       @default(ACTIVE)
-  name              String
-  shortName         String
-  primaryColor      String             @default("#0d766d")
-  accentColor       String             @default("#e3a72f")
-  caseTerm          String             @default("Case")
-  missionTerm       String             @default("Mission")
-  approvalThreshold BigInt?
-  memberships       TenantMembership[]
-  beneficiaries     Beneficiary[]
-  cases             Case[]
-  auditEvents       AuditEvent[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-}
-
-model TenantMembership {
-  id        String           @id @default(uuid()) @db.Uuid
-  tenantId  String           @db.Uuid
-  userId    String           @db.Uuid
-  role      TenantRole
-  status    MembershipStatus @default(INVITED)
-  invitedAt DateTime         @default(now())
-  joinedAt  DateTime?
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, userId])
-  @@index([userId, status])
+  role         StaffRole         @default(CASE_MANAGER)
+  active       Boolean           @default(true)
+  managedCases Case[]            @relation("CaseManager")
+  verifications Case[]           @relation("CaseVerifier")
+  transitions CaseTransition[]
+  auditEvents  AuditEvent[]      @relation("AuditActor")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 }
 
 model Beneficiary {
   id            String            @id @default(uuid()) @db.Uuid
-  tenantId      String            @db.Uuid
-  referenceCode String
+  referenceCode String            @unique
   legalName     String
   preferredName String
   email         String?
@@ -133,21 +80,18 @@ model Beneficiary {
   region        String
   country       String            @default("IN") @db.Char(2)
   status        BeneficiaryStatus @default(ACTIVE)
-  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   cases         Case[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
-  @@unique([tenantId, referenceCode])
-  @@index([tenantId, preferredName])
-  @@index([tenantId, phone])
+  @@index([preferredName])
+  @@index([phone])
 }
 
 model Case {
   id                   String           @id @default(uuid()) @db.Uuid
-  tenantId             String           @db.Uuid
   beneficiaryId        String           @db.Uuid
-  caseNumber           String
+  caseNumber           String           @unique
   title                String
   category             String
   description          String
@@ -158,47 +102,46 @@ model Case {
   stage                CaseStage        @default(SUBMITTED)
   caseManagerId        String?          @db.Uuid
   verifierId           String?          @db.Uuid
-  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   beneficiary          Beneficiary      @relation(fields: [beneficiaryId], references: [id], onDelete: Restrict)
+  caseManager          User?            @relation("CaseManager", fields: [caseManagerId], references: [id], onDelete: SetNull)
+  verifier             User?            @relation("CaseVerifier", fields: [verifierId], references: [id], onDelete: SetNull)
   transitions          CaseTransition[]
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   closedAt             DateTime?
 
-  @@unique([tenantId, caseNumber])
-  @@index([tenantId, stage])
-  @@index([tenantId, beneficiaryId])
-  @@index([tenantId, caseManagerId])
-  @@index([tenantId, verifierId])
+  @@index([stage])
+  @@index([beneficiaryId])
+  @@index([caseManagerId])
+  @@index([verifierId])
 }
 
 model CaseTransition {
   id          String    @id @default(uuid()) @db.Uuid
-  tenantId    String    @db.Uuid
   caseId      String    @db.Uuid
   fromStage   CaseStage?
   toStage     CaseStage
   actorUserId String    @db.Uuid
   reason      String?
   case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actor       User      @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
   createdAt   DateTime  @default(now())
 
-  @@index([tenantId, caseId, createdAt])
+  @@index([caseId, createdAt])
+  @@index([actorUserId])
 }
 
 model AuditEvent {
   id          String      @id @default(uuid()) @db.Uuid
-  tenantId    String      @db.Uuid
   actorUserId String?     @db.Uuid
   action      AuditAction
   entityType  String
   entityId    String
   summary     Json?
   requestId   String?
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   actor       User?       @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
   createdAt   DateTime    @default(now())
 
-  @@index([tenantId, entityType, entityId])
-  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }

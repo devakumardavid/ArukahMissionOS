@@ -1,4 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*.ts", "prisma.config.ts"]
+  "compilerOptions": {
+    "declaration": true,
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "generated/prisma/**/*.ts"],
+  "exclude": ["dist", "prisma.config.ts"]
 }

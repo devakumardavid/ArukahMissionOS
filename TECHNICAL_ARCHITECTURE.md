@@ -21,17 +21,18 @@
 ### Authentication and authorization
 
 - Auth0
-- Organization membership mapped to MissionOS tenants
-- Tenant-specific roles and permissions stored in MissionOS
+- Internal Arukah staff accounts only
+- One application role per staff member
 - Server-side RBAC and PostgreSQL Row Level Security
 - MFA required for privileged staff
 
-Auth0 is preferred over Firebase for this product because MissionOS has organization membership, enterprise identity, staff administration, MFA, and multi-tenant authorization requirements. MissionOS remains the authority for application roles, tenant membership, and fine-grained permissions.
+Auth0 handles authentication and MFA. MissionOS remains the authority for
+staff roles, account status, and fine-grained permissions.
 
 ### Document storage
 
 - AWS S3 private buckets
-- Tenant-scoped object keys
+- Case-scoped object keys
 - Short-lived presigned upload and download URLs
 - Server-side encryption
 - Malware scanning pipeline
@@ -102,15 +103,6 @@ Begin with a modular monolith rather than independent microservices. Each domain
 - Invitations and account status
 - MFA policy
 
-### Tenant module
-
-- Organizations
-- Tenant configuration
-- Branding
-- Custom domains
-- Workflow versions
-- Approval thresholds
-
 ### Beneficiary module
 
 - Beneficiary profiles
@@ -160,15 +152,6 @@ Begin with a modular monolith rather than independent microservices. Each domain
 - Follow-up
 - Closure checklist
 
-### Mission and donor module
-
-- Published causes
-- Donor profiles
-- Missions
-- Budgets
-- Allocations
-- Impact reports
-
 ### Audit module
 
 - Immutable audit events
@@ -193,21 +176,18 @@ Begin with a modular monolith rather than independent microservices. Each domain
 - Recommendation scoring
 - Prompt and model governance
 
-## Multi-tenant security model
-
-Every governed record contains `tenant_id`.
+## Internal security model
 
 Every API request:
 
 1. Validates the Auth0 access token.
-2. Resolves the user and tenant membership.
-3. Derives tenant context on the server.
-4. Checks the required permission.
-5. Sets database tenant context.
-6. Executes tenant-scoped queries.
-7. Records material activity in the audit log.
+2. Resolves the active Arukah staff account.
+3. Checks account status and the required role or permission.
+4. Executes the authorized operation.
+5. Records material activity in the audit log.
 
-The browser is never trusted to authorize a tenant merely by sending a tenant ID.
+Multi-organization tenancy and donor-facing services are deferred until the
+internal pilot proves the workflow.
 
 ## Repository structure
 
@@ -278,4 +258,3 @@ No production beneficiary or payment data should be copied into development or s
 ## Architecture principle
 
 The database and API are the source of truth. Temporal coordinates work but does not own business data. n8n integrates external systems but does not own workflow state. AI suggests and extracts but does not make final case, payment, or compliance decisions.
-

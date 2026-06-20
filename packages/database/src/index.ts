@@ -1,7 +1,10 @@
-export type DatabaseHealth = {
-  status: "configured";
-};
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client";
 
-export const databaseHealth: DatabaseHealth = {
-  status: "configured"
-};
+export { Prisma, PrismaClient } from "../generated/prisma/client";
+
+export function createPrismaClient(connectionString: string) {
+  const adapter = new PrismaPg({ connectionString });
+
+  return new PrismaClient({ adapter });
+}

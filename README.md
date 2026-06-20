@@ -2,6 +2,14 @@
 
 This repository now contains the production application foundation and the validated static prototype.
 
+## Active MVP scope
+
+The production application is an internal tool for the Arukah team. It supports
+Super Admin, Case Manager, Verifier, and Finance Manager workflows in one
+organization. Donor accounts, public marketplaces, white labeling, and
+multi-organization tenancy are future phases; prototype screens for those ideas
+are not part of the active backend scope.
+
 ## Production workspace
 
 ```text
@@ -16,10 +24,9 @@ prototype                Original public website and interactive platform protot
 
 ### Local commands
 
-This workspace includes project-local `node` and `pnpm` launchers under `bin/` because the host machine does not expose package tooling globally.
+Use Node.js 22 or later and pnpm 11.5.3.
 
 ```sh
-export PATH="$PWD/bin:$PATH"
 pnpm install
 pnpm db:generate
 pnpm typecheck
@@ -30,9 +37,13 @@ pnpm dev:api
 
 - Next.js: `http://localhost:3000`
 - NestJS health: `http://localhost:4000/api/health`
+- NestJS readiness: `http://localhost:4000/api/health/ready`
 - Swagger: `http://localhost:4000/api/docs`
 
 PostgreSQL is described in `compose.yaml`. Docker or another PostgreSQL 17 installation is required before running migrations.
+Copy `.env.example` to `.env` before starting the API. The liveness endpoint remains
+available without PostgreSQL; the readiness endpoint returns `503` until the database
+is configured and reachable.
 
 ## Prototype
 
@@ -45,8 +56,8 @@ An internal-use prototype for proving Arukah's end-to-end assistance workflow be
 - [Core domain model](DATA_MODEL.md)
 - [Implementation roadmap](ROADMAP.md)
 - [Seven-module contract](MODULES.md)
-- [Donor portal prototype](DONOR_PORTAL.md)
-- [Multi-tenant architecture](MULTI_TENANT_ARCHITECTURE.md)
+- [Future donor portal concept](DONOR_PORTAL.md)
+- [Future multi-tenant architecture](MULTI_TENANT_ARCHITECTURE.md)
 - [Technical architecture](TECHNICAL_ARCHITECTURE.md)
 - [Prototype-to-production migration](MIGRATION_PLAN.md)
 
