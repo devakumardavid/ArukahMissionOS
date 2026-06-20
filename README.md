@@ -51,6 +51,7 @@ An internal-use prototype for proving Arukah's end-to-end assistance workflow be
 
 ## Product documentation
 
+- [Current technology stack](TECH_STACK.md)
 - [Product vision](PRODUCT_VISION.md)
 - [Phase 1 MVP specification](MVP_SPEC.md)
 - [Core domain model](DATA_MODEL.md)
