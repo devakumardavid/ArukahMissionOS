@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arukah MissionOS",
-  description: "Accountable compassion from verified need to measurable impact."
+  title: "Arukah MissionOS | Internal case management",
+  description: "Arukah's internal workspace for accountable assistance case management."
 };
 
 export default function RootLayout({
