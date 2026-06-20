@@ -1,12 +1,11 @@
-export const tenantRoles = [
+export const staffRoles = [
   "SUPER_ADMIN",
   "CASE_MANAGER",
   "VERIFIER",
-  "FINANCE_MANAGER",
-  "DONOR"
+  "FINANCE_MANAGER"
 ] as const;
 
-export type TenantRole = (typeof tenantRoles)[number];
+export type StaffRole = (typeof staffRoles)[number];
 
 export const caseStages = [
   "SUBMITTED",

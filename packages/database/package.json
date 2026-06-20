@@ -2,10 +2,16 @@
   "name": "@arukah/database",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "exports": "./src/index.ts",
+  "main": "./dist/src/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "generate": "prisma generate",
@@ -13,10 +19,13 @@
     "studio": "prisma studio"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "latest",
     "@prisma/client": "latest",
-    "dotenv": "latest"
+    "dotenv": "latest",
+    "pg": "latest"
   },
   "devDependencies": {
+    "@types/pg": "latest",
     "prisma": "latest",
     "typescript": "latest"
   }
