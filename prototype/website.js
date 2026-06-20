@@ -3,6 +3,11 @@ const menuButton = document.querySelector("#public-menu");
 const nav = document.querySelector("#public-nav");
 const contactForm = document.querySelector("#public-contact-form");
 const formStatus = document.querySelector("#form-status");
+const missionOsUrl = window.ARUKAH_CONFIG?.missionOsUrl || "http://localhost:3000";
+
+document.querySelectorAll("[data-app-link]").forEach(link => {
+  link.href = missionOsUrl;
+});
 
 window.addEventListener("scroll", () => {
   header.classList.toggle("scrolled", window.scrollY > 30);
