@@ -7,8 +7,7 @@ applications:
         preBuild:
           commands:
             - npm install -g pnpm@11.0.7
-            - pnpm config set node-linker hoisted
-            - pnpm install --frozen-lockfile
+            - pnpm install --frozen-lockfile --config.node-linker=hoisted
         build:
           commands:
             - pnpm --filter @arukah/web build
