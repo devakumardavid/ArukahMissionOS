@@ -1,6 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  clearSession,
+  getCurrentUser,
+  readSession,
+  saveSession,
+  type AuthSession,
+  type StaffRole
+} from "../lib/auth";
+import type { CreatedCase } from "../lib/cases";
+import { LoginScreen } from "./login-screen";
+import { NewCaseDialog } from "./new-case-dialog";
 
 type View = "dashboard" | "beneficiaries" | "cases" | "verification" | "payments" | "reports";
 type Role = "Super Admin" | "Case Manager" | "Verifier" | "Finance Manager";
@@ -36,29 +47,133 @@ const roleDescriptions: Record<Role, string> = {
   "Finance Manager": "Payments and reconciliation"
 };
 
+const roleLabels: Record<StaffRole, Role> = {
+  SUPER_ADMIN: "Super Admin",
+  CASE_MANAGER: "Case Manager",
+  VERIFIER: "Verifier",
+  FINANCE_MANAGER: "Finance Manager"
+};
+
 const publicWebsiteUrl =
   process.env.NEXT_PUBLIC_ARUKAH_WEBSITE_URL ?? "http://localhost:8080";
 
 export default function HomePage() {
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    const stored = readSession();
+
+    if (!stored) {
+      setCheckingSession(false);
+      return;
+    }
+
+    getCurrentUser(stored.accessToken)
+      .then((user) => {
+        const refreshed = { ...stored, user };
+        saveSession(refreshed);
+        setSession(refreshed);
+      })
+      .catch(() => clearSession())
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  function handleAuthenticated(authSession: AuthSession) {
+    saveSession(authSession);
+    setSession(authSession);
+  }
+
+  function handleLogout() {
+    clearSession();
+    setSession(null);
+  }
+
+  if (checkingSession) {
+    return (
+      <main className="session-loading" aria-label="Loading Arukah MissionOS">
+        <div className="brand-mark">A</div>
+        <span>Opening MissionOS…</span>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+  }
+
+  return <MissionWorkspace session={session} onLogout={handleLogout} />;
+}
+
+function MissionWorkspace({
+  session,
+  onLogout
+}: {
+  session: AuthSession;
+  onLogout: () => void;
+}) {
   const [activeView, setActiveView] = useState<View>("dashboard");
-  const [role, setRole] = useState<Role>("Case Manager");
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [caseItems, setCaseItems] = useState(cases);
+  const [newCaseOpen, setNewCaseOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const role = roleLabels[session.user.role];
+  const firstName = session.user.displayName.trim().split(/\s+/)[0] ?? "Team";
+  const initials = session.user.displayName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 
   const visibleCases = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return cases;
-    return cases.filter((item) =>
+    if (!normalized) return caseItems;
+    return caseItems.filter((item) =>
       [item.id, item.title, item.person, item.category, item.stage].some((value) =>
         value.toLowerCase().includes(normalized)
       )
     );
-  }, [query]);
+  }, [caseItems, query]);
 
   function navigate(view: View) {
     setActiveView(view);
     setMenuOpen(false);
     setQuery("");
+  }
+
+  function handleCaseCreated(created: CreatedCase) {
+    const amount = new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: created.currency,
+      maximumFractionDigits: 2
+    }).format(Number(created.requestedAmountMinor) / 100);
+
+    setCaseItems((current) => [
+      {
+        id: created.caseNumber,
+        title: created.title,
+        person: created.beneficiary.preferredName,
+        category: created.category,
+        amount,
+        stage: "Submitted",
+        urgency:
+          created.urgency === "NORMAL"
+            ? "Normal"
+            : created.urgency === "HIGH"
+              ? "High"
+              : "Urgent",
+        owner: initials || "—",
+        updated: "Just now"
+      },
+      ...current
+    ]);
+    setNewCaseOpen(false);
+    setActiveView("cases");
+    setNotice(`${created.caseNumber} was created successfully.`);
+    window.setTimeout(() => setNotice(""), 4000);
   }
 
   return (
@@ -102,14 +217,12 @@ export default function HomePage() {
         </div>
 
         <div className="user-card">
-          <div className="avatar">DD</div>
+          <div className="avatar">{initials}</div>
           <div className="user-details">
-            <strong>David</strong>
-            <select value={role} onChange={(event) => setRole(event.target.value as Role)} aria-label="Preview staff role">
-              {(Object.keys(roleDescriptions) as Role[]).map((item) => <option key={item}>{item}</option>)}
-            </select>
+            <strong>{session.user.displayName}</strong>
+            <span>{role}</span>
           </div>
-          <button className="icon-button" aria-label="Account settings" type="button"><Icon name="dots" /></button>
+          <button className="icon-button" aria-label="Sign out" onClick={onLogout} title="Sign out" type="button"><Icon name="logout" /></button>
         </div>
       </aside>
 
@@ -131,31 +244,39 @@ export default function HomePage() {
             <kbd>⌘ K</kbd>
           </div>
           <div className="topbar-actions">
-            <div className="api-status"><i /> Preview data</div>
+            <div className="api-status connected"><i /> Signed in</div>
             <button className="icon-button notification" aria-label="Notifications" type="button"><Icon name="bell" /><i /></button>
-            <button className="primary-button" type="button"><Icon name="plus" /> New case</button>
+            <a className="primary-button" href="/cases/new"><Icon name="plus" /> New case</a>
           </div>
         </header>
 
         <div className="content">
-          {activeView === "dashboard" && <Dashboard role={role} onNavigate={navigate} cases={visibleCases} />}
-          {activeView === "cases" && <CasesView cases={visibleCases} />}
+          {activeView === "dashboard" && <Dashboard role={role} firstName={firstName} onNavigate={navigate} cases={visibleCases} />}
+          {activeView === "cases" && <CasesView cases={visibleCases} onNewCase={() => setNewCaseOpen(true)} />}
           {activeView === "beneficiaries" && <BeneficiariesView query={query} />}
           {activeView === "verification" && <QueueView type="verification" />}
           {activeView === "payments" && <QueueView type="payments" />}
           {activeView === "reports" && <ReportsView />}
         </div>
       </main>
+      {notice ? <div className="success-toast" role="status">{notice}</div> : null}
+      {newCaseOpen ? (
+        <NewCaseDialog
+          onClose={() => setNewCaseOpen(false)}
+          onCreated={handleCaseCreated}
+          session={session}
+        />
+      ) : null}
     </div>
   );
 }
 
-function Dashboard({ role, onNavigate, cases: items }: { role: Role; onNavigate: (view: View) => void; cases: typeof cases }) {
+function Dashboard({ role, firstName, onNavigate, cases: items }: { role: Role; firstName: string; onNavigate: (view: View) => void; cases: typeof cases }) {
   return (
     <>
       <PageHeading
         eyebrow="Saturday, 20 June"
-        title="Good morning, David."
+        title={`Good morning, ${firstName}.`}
         description={`${roleDescriptions[role]}. Here is what needs attention across Arukah today.`}
       />
 
@@ -215,12 +336,12 @@ function Dashboard({ role, onNavigate, cases: items }: { role: Role; onNavigate:
   );
 }
 
-function CasesView({ cases: items }: { cases: typeof cases }) {
+function CasesView({ cases: items, onNewCase: _onNewCase }: { cases: typeof cases; onNewCase: () => void }) {
   return (
     <>
       <PageHeading eyebrow="Case management" title="Cases" description="Track every request from intake through responsible closure.">
         <button className="secondary-button" type="button"><Icon name="filter" /> Filter</button>
-        <button className="primary-button" type="button"><Icon name="plus" /> New case</button>
+        <a className="primary-button" href="/cases/new"><Icon name="plus" /> New case</a>
       </PageHeading>
       <div className="view-tabs">
         <button className="active" type="button">Active <span>8</span></button>
@@ -355,7 +476,7 @@ function Activity({ initials, text, time }: { initials: string; text: React.Reac
   return <div className="activity-item"><div className="activity-avatar">{initials}</div><div><p>{text}</p><span>{time}</span></div></div>;
 }
 
-type IconName = "grid" | "people" | "folder" | "verify" | "payment" | "report" | "dots" | "menu" | "search" | "bell" | "plus" | "complete" | "impact" | "arrow" | "chevron" | "filter" | "pin" | "clock" | "globe" | "external";
+type IconName = "grid" | "people" | "folder" | "verify" | "payment" | "report" | "dots" | "menu" | "search" | "bell" | "plus" | "complete" | "impact" | "arrow" | "chevron" | "filter" | "pin" | "clock" | "globe" | "external" | "logout";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -378,7 +499,8 @@ function Icon({ name }: { name: IconName }) {
     pin: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
-    external: <><path d="M14 5h5v5M10 14 19 5" /><path d="M19 14v5H5V5h5" /></>
+    external: <><path d="M14 5h5v5M10 14 19 5" /><path d="M19 14v5H5V5h5" /></>,
+    logout: <><path d="M10 17l5-5-5-5M15 12H3" /><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5" /></>
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
