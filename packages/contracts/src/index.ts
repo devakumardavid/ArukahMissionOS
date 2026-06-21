@@ -19,7 +19,16 @@ export const createCaseSchema = z.object({
   description: z.string().trim().min(20).max(5000),
   requestedAmountMinor: z.number().int().positive(),
   currency: z.string().trim().length(3).default("INR"),
-  urgency: z.enum(["NORMAL", "HIGH", "URGENT"]).default("NORMAL")
+  urgency: z.enum(["NORMAL", "HIGH", "URGENT"]).default("NORMAL"),
+  caseManagerId: z.string().uuid().nullable().optional(),
+  verifierId: z.string().uuid().nullable().optional()
 });
 
 export type CreateCaseInput = z.infer<typeof createCaseSchema>;
+
+export const updateCaseSchema = createCaseSchema.partial().refine(
+  (input) => Object.keys(input).length > 0,
+  "At least one case field must be provided"
+);
+
+export type UpdateCaseInput = z.infer<typeof updateCaseSchema>;

@@ -16,6 +16,7 @@ async function bootstrap() {
     .setTitle("Arukah MissionOS API")
     .setDescription("Internal APIs for Arukah's accountable case-management workflow.")
     .setVersion("0.1.0")
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup("api/docs", app, document);

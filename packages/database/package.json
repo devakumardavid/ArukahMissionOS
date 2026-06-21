@@ -14,7 +14,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "generate": "prisma generate",
+    "generate": "prisma generate && tsc",
     "migrate": "prisma migrate dev",
     "studio": "prisma studio"
   },

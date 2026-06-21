@@ -42,6 +42,7 @@ enum Urgency {
 enum AuditAction {
   CREATED
   UPDATED
+  DELETED
   ASSIGNED
   TRANSITIONED
   APPROVED
@@ -54,19 +55,21 @@ enum AuditAction {
 }
 
 model User {
-  id           String            @id @default(uuid()) @db.Uuid
-  authSubject  String            @unique
-  email        String            @unique
-  displayName  String
-  phone        String?
-  role         StaffRole         @default(CASE_MANAGER)
-  active       Boolean           @default(true)
-  managedCases Case[]            @relation("CaseManager")
+  id            String           @id @default(uuid()) @db.Uuid
+  authSubject   String           @unique
+  email         String           @unique
+  displayName   String
+  phone         String?
+  passwordHash  String?
+  role          StaffRole        @default(CASE_MANAGER)
+  active        Boolean          @default(true)
+  managedCases  Case[]           @relation("CaseManager")
   verifications Case[]           @relation("CaseVerifier")
-  transitions CaseTransition[]
-  auditEvents  AuditEvent[]      @relation("AuditActor")
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  transitions   CaseTransition[]
+  auditEvents   AuditEvent[]     @relation("AuditActor")
+  lastLoginAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 }
 
 model Beneficiary {
@@ -117,15 +120,15 @@ model Case {
 }
 
 model CaseTransition {
-  id          String    @id @default(uuid()) @db.Uuid
-  caseId      String    @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
+  caseId      String     @db.Uuid
   fromStage   CaseStage?
   toStage     CaseStage
-  actorUserId String    @db.Uuid
+  actorUserId String     @db.Uuid
   reason      String?
-  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  actor       User      @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
-  createdAt   DateTime  @default(now())
+  case        Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  actor       User       @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
 
   @@index([caseId, createdAt])
   @@index([actorUserId])

@@ -55,6 +55,45 @@ is configured and reachable.
 - Local defaults connect `http://localhost:8080` and `http://localhost:3000`.
   Replace both values with the deployed website and app domains in production.
 
+### Case API
+
+The first database-backed case module is available under `/api/cases`:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/cases` | Create a submitted case |
+| `GET` | `/api/cases` | List, search, filter, and paginate cases |
+| `GET` | `/api/cases/:id` | Retrieve one case |
+| `PATCH` | `/api/cases/:id` | Update intake details or assignments |
+| `DELETE` | `/api/cases/:id` | Delete a submitted case with no transition history |
+
+Workflow stage changes are intentionally excluded from CRUD updates. They will
+be handled by a dedicated transition endpoint with role checks and transition
+history.
+
+### Basic staff authentication
+
+The internal MVP uses email/password authentication with short-lived signed
+bearer tokens:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/auth/bootstrap` | Create the first Super Admin once |
+| `POST` | `/api/auth/login` | Exchange staff credentials for a bearer token |
+| `GET` | `/api/auth/me` | Return the authenticated staff identity |
+
+Set `AUTH_JWT_SECRET` and `AUTH_BOOTSTRAP_KEY` in `.env`. Both case mutations
+and reads require `Authorization: Bearer <token>`. Case creation, updates, and
+deletion are limited to Super Admin and Case Manager roles.
+
+The Next.js application at `http://localhost:3000` includes the staff login
+screen. It sends credentials to `NEXT_PUBLIC_API_URL`, restores a saved session
+through `/api/auth/me`, displays the authenticated staff name and role, and
+clears the local session when the user signs out.
+
+The New Case dialog can select an existing beneficiary or create one inline,
+then submits the authenticated case intake to the API.
+
 ## Prototype
 
 An internal-use prototype for proving Arukah's end-to-end assistance workflow before building a donor marketplace.
