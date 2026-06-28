@@ -1,0 +1,26 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.workingDirectories": [
+    "apps/web",
+    "apps/api",
+    "packages/contracts",
+    "packages/database",
+    "packages/domain",
+    "packages/ui"
+  ],
+  "files.exclude": {
+    "**/.next": true,
+    "**/.local-node": true,
+    "**/dist": true,
+    "**/node_modules": true
+  },
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.osx": {
+    "PATH": "${workspaceFolder}/.local-node/bin:${env:PATH}"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

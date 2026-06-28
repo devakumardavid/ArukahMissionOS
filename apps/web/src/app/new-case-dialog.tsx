@@ -6,8 +6,14 @@ import {
   createBeneficiary,
   createCase,
   type Beneficiary,
+  type CaseCategory,
   type CreatedCase,
-  listBeneficiaries
+  type IndiaCity,
+  type IndiaState,
+  listCaseCategories,
+  listBeneficiaries,
+  listIndiaCities,
+  listIndiaStates
 } from "../lib/cases";
 
 type NewCaseDialogProps = {
@@ -24,16 +30,29 @@ export function NewCaseDialog({
   embedded = false
 }: NewCaseDialogProps) {
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
+  const [categories, setCategories] = useState<CaseCategory[]>([]);
+  const [states, setStates] = useState<IndiaState[]>([]);
+  const [tamilNaduCities, setTamilNaduCities] = useState<IndiaCity[]>([]);
+  const [selectedStateCode, setSelectedStateCode] = useState("TN");
   const [beneficiaryId, setBeneficiaryId] = useState("");
   const [createNewBeneficiary, setCreateNewBeneficiary] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    listBeneficiaries(session)
+    Promise.all([
+      listBeneficiaries(session),
+      listCaseCategories(session),
+      listIndiaStates(session),
+      listIndiaCities(session, "TN")
+    ])
       .then((items) => {
-        setBeneficiaries(items);
-        if (items[0]) setBeneficiaryId(items[0].id);
+        const [beneficiaryItems, categoryItems, stateItems, cityItems] = items;
+        setBeneficiaries(beneficiaryItems);
+        setCategories(categoryItems);
+        setStates(stateItems);
+        setTamilNaduCities(cityItems);
+        if (beneficiaryItems[0]) setBeneficiaryId(beneficiaryItems[0].id);
         else setCreateNewBeneficiary(true);
       })
       .catch((caught) =>
@@ -137,9 +156,37 @@ export function NewCaseDialog({
                 <label>Legal name<input name="legalName" required /></label>
                 <label>Email<input name="email" type="email" /></label>
                 <label>Phone<input minLength={8} name="phone" /></label>
-                <label>City<input name="city" required /></label>
-                <label>Region / state<input name="region" required /></label>
-                <label>Country code<input defaultValue="IN" maxLength={2} minLength={2} name="country" required /></label>
+                <label>State
+                  <select
+                    name="region"
+                    onChange={(event) => {
+                      const selected = states.find((item) => item.name === event.target.value);
+                      setSelectedStateCode(selected?.code ?? "");
+                    }}
+                    required
+                    defaultValue="Tamil Nadu"
+                  >
+                    <option value="">Select state</option>
+                    {states.map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}{item.kind === "UNION_TERRITORY" ? " (UT)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selectedStateCode === "TN" ? (
+                  <label>City
+                    <select name="city" required>
+                      <option value="">Select Tamil Nadu city</option>
+                      {tamilNaduCities.map((item) => (
+                        <option key={item.id} value={item.name}>{item.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label>City<input name="city" required /></label>
+                )}
+                <input name="country" type="hidden" value="IN" />
               </>
             ) : null}
           </fieldset>
@@ -147,7 +194,14 @@ export function NewCaseDialog({
           <fieldset>
             <legend>Assistance request</legend>
             <label className="field-full">Case title<input minLength={4} name="title" required /></label>
-            <label>Category<input minLength={2} name="category" placeholder="Healthcare" required /></label>
+            <label>Category
+              <select name="category" required>
+                <option value="">Select category</option>
+                {categories.map((item) => (
+                  <option key={item.id} value={item.name}>{item.name}</option>
+                ))}
+              </select>
+            </label>
             <label>Urgency<select defaultValue="NORMAL" name="urgency"><option value="NORMAL">Normal</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label>
             <label>Requested amount<input min="0.01" name="amount" required step="0.01" type="number" /></label>
             <label>Currency<input defaultValue="INR" maxLength={3} minLength={3} name="currency" required /></label>

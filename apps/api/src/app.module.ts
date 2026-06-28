@@ -5,11 +5,14 @@ import { AuthModule } from "./auth/auth.module";
 import { AuthGuard } from "./auth/guards/auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
 import { BeneficiariesModule } from "./beneficiaries/beneficiaries.module";
+import { CaseCategoriesModule } from "./case-categories/case-categories.module";
 import { CasesModule } from "./cases/cases.module";
 import { validateEnvironment } from "./config/environment";
 import { DatabaseModule } from "./database/database.module";
+import { DirectoryModule } from "./directory/directory.module";
 import { HealthController } from "./health.controller";
 import { HealthService } from "./health.service";
+import { LocationsModule } from "./locations/locations.module";
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { HealthService } from "./health.service";
     DatabaseModule,
     AuthModule,
     BeneficiariesModule,
+    CaseCategoriesModule,
+    LocationsModule,
+    DirectoryModule,
     CasesModule
   ],
   controllers: [HealthController],

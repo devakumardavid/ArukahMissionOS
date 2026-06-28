@@ -10,6 +10,8 @@ import {
 import { DatabaseService } from "../database/database.service";
 import { CreateCaseDto } from "./dto/create-case.dto";
 import { ListCasesQueryDto } from "./dto/list-cases-query.dto";
+import { SubmitPaymentDto } from "./dto/submit-payment.dto";
+import { SubmitVerificationDto } from "./dto/submit-verification.dto";
 import { UpdateCaseDto } from "./dto/update-case.dto";
 
 const caseInclude = {
@@ -227,6 +229,7 @@ export class CasesService {
     }
 
     await this.validateReferences(input);
+    const stageChanged = input.stage !== undefined && input.stage !== existing.stage;
     const updated = await this.database.prisma.$transaction(async (transaction) => {
       const caseRecord = await transaction.case.update({
         where: { id },
@@ -241,21 +244,178 @@ export class CasesService {
               : BigInt(input.requestedAmountMinor),
           currency: input.currency?.trim().toUpperCase(),
           urgency: input.urgency,
+          stage: input.stage,
+          closedAt:
+            input.stage === "CLOSED"
+              ? new Date()
+              : input.stage && existing.stage === "CLOSED"
+                ? null
+                : undefined,
           caseManagerId: input.caseManagerId,
           verifierId: input.verifierId
         },
         include: caseInclude
       });
 
+      if (stageChanged && input.stage) {
+        await transaction.caseTransition.create({
+          data: {
+            actorUserId,
+            caseId: id,
+            fromStage: existing.stage,
+            reason: "Updated from case detail panel",
+            toStage: input.stage
+          }
+        });
+      }
+
       await transaction.auditEvent.create({
         data: {
-          action: "UPDATED",
+          action: stageChanged ? "TRANSITIONED" : "UPDATED",
           actorUserId,
           entityType: "Case",
           entityId: id,
           summary: {
             changedFields: Object.keys(input),
-            caseNumber: existing.caseNumber
+            caseNumber: existing.caseNumber,
+            fromStage: stageChanged ? existing.stage : undefined,
+            toStage: stageChanged ? input.stage : undefined
+          }
+        }
+      });
+
+      return caseRecord;
+    });
+
+    return this.toResponse(updated);
+  }
+
+  async submitVerification(
+    id: string,
+    input: SubmitVerificationDto,
+    actorUserId: string
+  ): Promise<CaseResponse> {
+    const existing = await this.database.prisma.case.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException("Case not found");
+    }
+
+    if (existing.stage !== "VERIFICATION") {
+      throw new ConflictException("Only cases in verification can receive a verification recommendation");
+    }
+
+    const nextStage: CaseStage =
+      input.outcome === "APPROVE"
+        ? "PAYMENT"
+        : input.outcome === "REJECT"
+          ? "REJECTED"
+          : "ON_HOLD";
+    const approvedAmountMinor =
+      input.outcome === "APPROVE"
+        ? BigInt(input.approvedAmountMinor ?? Number(existing.requestedAmountMinor))
+        : null;
+
+    const updated = await this.database.prisma.$transaction(async (transaction) => {
+      const caseRecord = await transaction.case.update({
+        where: { id },
+        data: {
+          approvedAmountMinor,
+          closedAt: nextStage === "REJECTED" ? new Date() : null,
+          stage: nextStage,
+          verifierId: existing.verifierId ?? actorUserId
+        },
+        include: caseInclude
+      });
+
+      await transaction.caseTransition.create({
+        data: {
+          actorUserId,
+          caseId: id,
+          fromStage: existing.stage,
+          reason: input.notes.trim(),
+          toStage: nextStage
+        }
+      });
+
+      await transaction.auditEvent.create({
+        data: {
+          action: input.outcome === "APPROVE" ? "APPROVED" : input.outcome === "REJECT" ? "REJECTED" : "TRANSITIONED",
+          actorUserId,
+          entityType: "Case",
+          entityId: id,
+          summary: {
+            approvedAmountMinor: approvedAmountMinor?.toString() ?? null,
+            caseNumber: existing.caseNumber,
+            fromStage: existing.stage,
+            outcome: input.outcome,
+            toStage: nextStage,
+            verificationNotes: input.notes.trim()
+          }
+        }
+      });
+
+      return caseRecord;
+    });
+
+    return this.toResponse(updated);
+  }
+
+  async submitPayment(
+    id: string,
+    input: SubmitPaymentDto,
+    actorUserId: string
+  ): Promise<CaseResponse> {
+    const existing = await this.database.prisma.case.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException("Case not found");
+    }
+
+    if (existing.stage !== "PAYMENT") {
+      throw new ConflictException("Only cases in payment can receive a payment record");
+    }
+
+    const paidAmountMinor = BigInt(
+      input.paidAmountMinor ??
+        Number(existing.approvedAmountMinor ?? existing.requestedAmountMinor)
+    );
+
+    const updated = await this.database.prisma.$transaction(async (transaction) => {
+      const caseRecord = await transaction.case.update({
+        where: { id },
+        data: {
+          approvedAmountMinor: existing.approvedAmountMinor ?? paidAmountMinor,
+          stage: "IMPACT"
+        },
+        include: caseInclude
+      });
+
+      await transaction.caseTransition.create({
+        data: {
+          actorUserId,
+          caseId: id,
+          fromStage: existing.stage,
+          reason: `Payment recorded for ${input.payeeName.trim()} (${input.paymentReference.trim()}): ${input.notes.trim()}`,
+          toStage: "IMPACT"
+        }
+      });
+
+      await transaction.auditEvent.create({
+        data: {
+          action: "TRANSITIONED",
+          actorUserId,
+          entityType: "Case",
+          entityId: id,
+          summary: {
+            caseNumber: existing.caseNumber,
+            fromStage: existing.stage,
+            paidAmountMinor: paidAmountMinor.toString(),
+            paidOn: input.paidOn?.trim() || null,
+            payeeName: input.payeeName.trim(),
+            paymentNotes: input.notes.trim(),
+            paymentReference: input.paymentReference.trim(),
+            toStage: "IMPACT"
           }
         }
       });
@@ -306,9 +466,22 @@ export class CasesService {
 
   private async validateReferences(input: {
     beneficiaryId?: string;
+    category?: string;
     caseManagerId?: string | null;
     verifierId?: string | null;
   }) {
+    if (input.category !== undefined) {
+      const categoryName = input.category.trim();
+      const category = await this.database.prisma.caseCategory.findUnique({
+        where: { name: categoryName },
+        select: { active: true }
+      });
+
+      if (!category || !category.active) {
+        throw new UnprocessableEntityException("Select a valid case category");
+      }
+    }
+
     if (input.beneficiaryId) {
       const beneficiary = await this.database.prisma.beneficiary.findUnique({
         where: { id: input.beneficiaryId },

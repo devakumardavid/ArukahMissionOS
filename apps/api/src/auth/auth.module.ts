@@ -19,6 +19,7 @@ import { PasswordService } from "./password.service";
     })
   ],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService]
+  providers: [AuthService, PasswordService],
+  exports: [PasswordService]
 })
 export class AuthModule {}

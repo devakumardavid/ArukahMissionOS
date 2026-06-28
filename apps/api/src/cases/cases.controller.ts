@@ -30,6 +30,8 @@ import {
 } from "./cases.service";
 import { CreateCaseDto } from "./dto/create-case.dto";
 import { ListCasesQueryDto } from "./dto/list-cases-query.dto";
+import { SubmitPaymentDto } from "./dto/submit-payment.dto";
+import { SubmitVerificationDto } from "./dto/submit-verification.dto";
 import { UpdateCaseDto } from "./dto/update-case.dto";
 
 @ApiTags("cases")
@@ -73,6 +75,32 @@ export class CasesController {
     @CurrentUser() user: AuthenticatedUser
   ): Promise<CaseResponse> {
     return this.cases.update(id, input, user.id);
+  }
+
+  @Post(":id/verification")
+  @Roles("SUPER_ADMIN", "VERIFIER")
+  @ApiOperation({ summary: "Submit a verification recommendation" })
+  @ApiNotFoundResponse({ description: "Case not found" })
+  @ApiUnprocessableEntityResponse({ description: "Invalid verification recommendation" })
+  submitVerification(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() input: SubmitVerificationDto,
+    @CurrentUser() user: AuthenticatedUser
+  ): Promise<CaseResponse> {
+    return this.cases.submitVerification(id, input, user.id);
+  }
+
+  @Post(":id/payment")
+  @Roles("SUPER_ADMIN", "FINANCE_MANAGER")
+  @ApiOperation({ summary: "Record a payment and move the case to impact follow-up" })
+  @ApiNotFoundResponse({ description: "Case not found" })
+  @ApiUnprocessableEntityResponse({ description: "Invalid payment record" })
+  submitPayment(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() input: SubmitPaymentDto,
+    @CurrentUser() user: AuthenticatedUser
+  ): Promise<CaseResponse> {
+    return this.cases.submitPayment(id, input, user.id);
   }
 
   @Delete(":id")

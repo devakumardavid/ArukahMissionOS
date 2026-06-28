@@ -60,6 +60,9 @@ model User {
   email         String           @unique
   displayName   String
   phone         String?
+  staffType     String           @default("EMPLOYEE")
+  title         String?
+  organization  String?
   passwordHash  String?
   role          StaffRole        @default(CASE_MANAGER)
   active        Boolean          @default(true)
@@ -91,6 +94,25 @@ model Beneficiary {
   @@index([phone])
 }
 
+model Supplier {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  serviceType String
+  contactName String?
+  email       String?
+  phone       String?
+  city        String
+  region      String
+  notes       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([serviceType])
+  @@index([active])
+}
+
 model Case {
   id                   String           @id @default(uuid()) @db.Uuid
   beneficiaryId        String           @db.Uuid
@@ -117,6 +139,47 @@ model Case {
   @@index([beneficiaryId])
   @@index([caseManagerId])
   @@index([verifierId])
+}
+
+model CaseCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model IndiaState {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String   @unique
+  kind      String   @default("STATE")
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  cities    IndiaCity[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model IndiaCity {
+  id        String     @id @default(uuid()) @db.Uuid
+  stateId   String     @db.Uuid
+  name      String
+  active    Boolean    @default(true)
+  sortOrder Int        @default(0)
+  state     IndiaState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([stateId, name])
+  @@index([stateId, active, sortOrder])
 }
 
 model CaseTransition {
