@@ -1,4 +1,85 @@
 services:
+  public-site:
+    image: nginx:1.29-alpine
+    volumes:
+      - ./prototype:/usr/share/nginx/html:ro
+    ports:
+      - "${PUBLIC_SITE_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+      NEXT_PUBLIC_ARUKAH_WEBSITE_URL: ${NEXT_PUBLIC_ARUKAH_WEBSITE_URL:-http://localhost:8080}
+    command: >
+      sh -c "cd apps/web &&
+      ../../node_modules/.bin/next dev -H 0.0.0.0 -p 3000"
+    volumes:
+      - .:/app
+      - arukah_web_node_modules:/app/node_modules
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+
+  api:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      API_PORT: 4000
+      DATABASE_URL: postgresql://arukah:arukah@postgres:5432/arukah_missionos?schema=public
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-replace-with-at-least-32-random-characters}
+      AUTH_JWT_EXPIRES_SECONDS: ${AUTH_JWT_EXPIRES_SECONDS:-28800}
+      AUTH_BOOTSTRAP_KEY: ${AUTH_BOOTSTRAP_KEY:-replace-with-at-least-16-random-characters}
+    command: >
+      sh -c "cd packages/database &&
+      ../../node_modules/.bin/prisma generate &&
+      ../../node_modules/.bin/tsc &&
+      ../../node_modules/.bin/prisma migrate deploy &&
+      cd ../../apps/api &&
+      ../../node_modules/.bin/nest start --watch"
+    volumes:
+      - .:/app
+      - arukah_api_node_modules:/app/node_modules
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:4000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -17,3 +98,5 @@ services:
 
 volumes:
   arukah_postgres:
+  arukah_api_node_modules:
+  arukah_web_node_modules:

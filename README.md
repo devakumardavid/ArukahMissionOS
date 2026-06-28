@@ -46,6 +46,39 @@ Copy `.env.example` to `.env` before starting the API. The liveness endpoint rem
 available without PostgreSQL; the readiness endpoint returns `503` until the database
 is configured and reachable.
 
+### Docker Compose
+
+The Docker setup runs each production service in its own container:
+
+| Service | Container purpose | Host URL |
+| --- | --- | --- |
+| `public-site` | Static public Arukah website prototype | `http://localhost:8080` |
+| `web` | Next.js MissionOS frontend | `http://localhost:3000` |
+| `api` | NestJS backend API | `http://localhost:4000/api` |
+| `postgres` | PostgreSQL 17 database | `localhost:5432` |
+
+For day-to-day development, you can still run only PostgreSQL in Docker and run
+the apps locally with `pnpm`:
+
+```sh
+docker compose up postgres
+pnpm dev
+```
+
+For a production-like local run, start the full stack:
+
+```sh
+docker compose up --build
+```
+
+The API container connects to PostgreSQL over Docker's internal network and runs
+Prisma migrations before starting. The frontend container is built with
+`NEXT_PUBLIC_API_URL`, which should remain a browser-reachable URL such as
+`http://localhost:4000/api` for local testing.
+
+The public site container serves the files in `prototype/` with Nginx. Its local
+configuration links visitors into MissionOS at `http://localhost:3000`.
+
 ### Website and application links
 
 - The Next.js app reads `NEXT_PUBLIC_ARUKAH_WEBSITE_URL` to link back to the
