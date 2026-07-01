@@ -52,6 +52,7 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-replace-with-at-least-32-random-characters}
       AUTH_JWT_EXPIRES_SECONDS: ${AUTH_JWT_EXPIRES_SECONDS:-28800}
       AUTH_BOOTSTRAP_KEY: ${AUTH_BOOTSTRAP_KEY:-replace-with-at-least-16-random-characters}
+      SUPPORTING_DOCUMENT_UPLOAD_DIR: /app/uploads
     command: >
       sh -c "cd packages/database &&
       ../../node_modules/.bin/prisma generate &&
@@ -62,6 +63,7 @@ services:
     volumes:
       - .:/app
       - arukah_api_node_modules:/app/node_modules
+      - arukah_uploads:/app/uploads
     ports:
       - "${API_PORT:-4000}:4000"
     depends_on:
@@ -100,3 +102,4 @@ volumes:
   arukah_postgres:
   arukah_api_node_modules:
   arukah_web_node_modules:
+  arukah_uploads:

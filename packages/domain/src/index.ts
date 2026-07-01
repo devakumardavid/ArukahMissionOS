@@ -1,7 +1,8 @@
 export const staffRoles = [
   "SUPER_ADMIN",
+  "GENERAL_ADMIN",
   "CASE_MANAGER",
-  "VERIFIER",
+  "MISSION_VERIFIER",
   "FINANCE_MANAGER"
 ] as const;
 

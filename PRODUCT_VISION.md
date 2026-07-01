@@ -55,8 +55,9 @@ Included capabilities:
 Internal roles:
 
 - Super Admin
+- General Admin
 - Case Manager
-- Verifier
+- Mission Verifier
 - Finance Manager
 
 External people and organizations are recorded as case participants rather than platform users during the pilot.

@@ -22,6 +22,11 @@ The internal record is a **Case**. A **Cause** is a privacy-safe, approved repre
 
 - Super Admin
 
+Super Admin is reserved for software administration: creating staff accounts,
+managing access, and overriding workflow status when an exception requires it.
+General Admin handles regular operational administration across directory,
+beneficiary, case, verification, payment, reconciliation, and reporting work.
+
 ### MVP permission groups
 
 - User administration
@@ -47,7 +52,7 @@ The internal record is a **Case**. A **Cause** is a privacy-safe, approved repre
 
 - Submit case/cause
 - Review completeness
-- Assign case manager and verifier
+- Assign case manager and mission verifier
 - Approve, reject, or request more information
 - Track lifecycle state
 - Close case
@@ -80,14 +85,14 @@ The internal record is a **Case**. A **Cause** is a privacy-safe, approved repre
 
 ### Primary role
 
-- Verifier
+- Mission Verifier
 
 ### Acceptance criteria
 
 - Required checklist items are visible and attributable.
 - Each document has a review status and reviewer.
 - Risk rating and recommendation require rationale.
-- A verifier cannot make the final approval decision.
+- A mission verifier cannot make the final approval decision.
 - Completed verification is timestamped and immutable except through a documented reopening action.
 
 ## Module 4 — Provider Management
@@ -183,8 +188,9 @@ The internal record is a **Case**. A **Cause** is a privacy-safe, approved repre
 ### Primary roles
 
 - Super Admin: organization-wide metrics
+- General Admin: directory completeness and operational setup
 - Case Manager: assigned caseload and operational queues
-- Verifier: assigned verification queue
+- Mission Verifier: assigned verification queue
 - Finance Manager: payment and reconciliation queue
 
 ### Acceptance criteria
@@ -203,4 +209,3 @@ The internal record is a **Case**. A **Cause** is a privacy-safe, approved repre
 - Dates are stored in UTC and displayed in the user’s local timezone.
 - Workflow validation is enforced on the server.
 - Notifications are triggered by handoffs, missing information, overdue work, approval, payment, and closure.
-

@@ -26,6 +26,10 @@ export type Supplier = {
   region: string;
   notes: string | null;
   active: boolean;
+  verificationStatus: "PENDING" | "VERIFIED" | "REJECTED";
+  verificationNotes: string | null;
+  verifiedAt: string | null;
+  verifiedById: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -41,6 +45,8 @@ export type TeamMemberInput = {
   password?: string;
 };
 
+export type TeamMemberUpdateInput = Partial<TeamMemberInput>;
+
 export type SupplierInput = {
   name: string;
   serviceType: string;
@@ -49,6 +55,13 @@ export type SupplierInput = {
   phone?: string;
   city: string;
   region: string;
+  notes?: string;
+};
+
+export type SupplierUpdateInput = Partial<SupplierInput>;
+
+export type SupplierVerificationInput = {
+  status: "VERIFIED" | "REJECTED";
   notes?: string;
 };
 
@@ -89,6 +102,26 @@ export function createTeamMember(
   });
 }
 
+export function updateTeamMember(
+  session: AuthSession,
+  id: string,
+  input: TeamMemberUpdateInput
+): Promise<TeamMember> {
+  return directoryRequest(`/directory/team/${id}`, session, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function deleteTeamMember(
+  session: AuthSession,
+  id: string
+): Promise<void> {
+  return directoryRequest(`/directory/team/${id}`, session, {
+    method: "DELETE"
+  });
+}
+
 export function listSuppliers(session: AuthSession): Promise<Supplier[]> {
   return directoryRequest("/directory/suppliers", session);
 }
@@ -98,6 +131,37 @@ export function createSupplier(
   input: SupplierInput
 ): Promise<Supplier> {
   return directoryRequest("/directory/suppliers", session, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateSupplier(
+  session: AuthSession,
+  id: string,
+  input: SupplierUpdateInput
+): Promise<Supplier> {
+  return directoryRequest(`/directory/suppliers/${id}`, session, {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
+}
+
+export function deleteSupplier(
+  session: AuthSession,
+  id: string
+): Promise<void> {
+  return directoryRequest(`/directory/suppliers/${id}`, session, {
+    method: "DELETE"
+  });
+}
+
+export function verifySupplier(
+  session: AuthSession,
+  id: string,
+  input: SupplierVerificationInput
+): Promise<Supplier> {
+  return directoryRequest(`/directory/suppliers/${id}/verification`, session, {
     method: "POST",
     body: JSON.stringify(input)
   });

@@ -1,7 +1,8 @@
 export type StaffRole =
   | "SUPER_ADMIN"
+  | "GENERAL_ADMIN"
   | "CASE_MANAGER"
-  | "VERIFIER"
+  | "MISSION_VERIFIER"
   | "FINANCE_MANAGER";
 
 export type AuthenticatedUser = {

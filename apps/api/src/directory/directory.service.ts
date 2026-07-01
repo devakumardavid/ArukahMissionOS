@@ -2,6 +2,7 @@ import { Prisma } from "@arukah/database";
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException
 } from "@nestjs/common";
@@ -11,6 +12,7 @@ import { CreateSupplierDto } from "./dto/create-supplier.dto";
 import { CreateTeamMemberDto } from "./dto/create-team-member.dto";
 import { UpdateSupplierDto } from "./dto/update-supplier.dto";
 import { UpdateTeamMemberDto } from "./dto/update-team-member.dto";
+import { VerifySupplierDto } from "./dto/verify-supplier.dto";
 
 const teamSelect = {
   id: true,
@@ -48,6 +50,8 @@ export class DirectoryService {
     input: CreateTeamMemberDto,
     actorUserId: string
   ): Promise<TeamMemberResponse> {
+    await this.ensureCanManageTeamRole(actorUserId, input.role);
+
     const email = input.email.trim().toLowerCase();
     const existing = await this.database.prisma.user.findUnique({
       where: { email },
@@ -109,12 +113,14 @@ export class DirectoryService {
 
     const existing = await this.database.prisma.user.findUnique({
       where: { id },
-      select: { id: true }
+      select: { id: true, role: true }
     });
 
     if (!existing) {
       throw new NotFoundException("Team member not found");
     }
+
+    await this.ensureCanManageTeamRole(actorUserId, input.role ?? existing.role);
 
     const email = input.email?.trim().toLowerCase();
     const passwordHash = input.password
@@ -156,12 +162,14 @@ export class DirectoryService {
   async setTeamMemberActive(id: string, active: boolean, actorUserId: string) {
     const existing = await this.database.prisma.user.findUnique({
       where: { id },
-      select: { id: true }
+      select: { id: true, role: true }
     });
 
     if (!existing) {
       throw new NotFoundException("Team member not found");
     }
+
+    await this.ensureCanManageTeamRole(actorUserId, existing.role);
 
     await this.database.prisma.$transaction([
       this.database.prisma.user.update({ where: { id }, data: { active } }),
@@ -230,7 +238,13 @@ export class DirectoryService {
     return this.database.prisma.$transaction(async (transaction) => {
       const supplier = await transaction.supplier.update({
         where: { id },
-        data: this.toSupplierUpdateData(input)
+        data: {
+          ...this.toSupplierUpdateData(input),
+          verificationNotes: "Supplier details changed; verification should be refreshed.",
+          verificationStatus: "PENDING",
+          verifiedAt: null,
+          verifiedById: null
+        }
       });
 
       await transaction.auditEvent.create({
@@ -271,6 +285,51 @@ export class DirectoryService {
     ]);
   }
 
+  async verifySupplier(
+    id: string,
+    input: VerifySupplierDto,
+    actorUserId: string
+  ): Promise<SupplierResponse> {
+    const existing = await this.database.prisma.supplier.findUnique({
+      where: { id },
+      select: { id: true, name: true }
+    });
+
+    if (!existing) {
+      throw new NotFoundException("Supplier not found");
+    }
+
+    const notes = input.notes?.trim() || null;
+
+    return this.database.prisma.$transaction(async (transaction) => {
+      const supplier = await transaction.supplier.update({
+        where: { id },
+        data: {
+          verificationNotes: notes,
+          verificationStatus: input.status,
+          verifiedAt: new Date(),
+          verifiedById: actorUserId
+        }
+      });
+
+      await transaction.auditEvent.create({
+        data: {
+          action: input.status === "VERIFIED" ? "APPROVED" : "REJECTED",
+          actorUserId,
+          entityId: id,
+          entityType: "Supplier",
+          summary: {
+            name: existing.name,
+            notes,
+            verificationStatus: input.status
+          }
+        }
+      });
+
+      return supplier;
+    });
+  }
+
   private toSupplierCreateData(input: CreateSupplierDto) {
     return {
       city: input.city.trim(),
@@ -296,5 +355,20 @@ export class DirectoryService {
       region: input.region?.trim(),
       serviceType: input.serviceType?.trim()
     };
+  }
+
+  private async ensureCanManageTeamRole(actorUserId: string, targetRole: string) {
+    const actor = await this.database.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { role: true }
+    });
+
+    if (!actor) {
+      throw new ForbiddenException("Unable to verify directory permissions");
+    }
+
+    if (targetRole === "SUPER_ADMIN" && actor.role !== "SUPER_ADMIN") {
+      throw new ForbiddenException("Only Super Admin can manage Super Admin accounts");
+    }
   }
 }

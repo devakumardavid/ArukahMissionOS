@@ -32,10 +32,27 @@ export class CreateTeamMemberDto {
   staffType!: "EMPLOYEE" | "ASSOCIATE";
 
   @ApiProperty({
-    enum: ["SUPER_ADMIN", "CASE_MANAGER", "VERIFIER", "FINANCE_MANAGER"]
+    enum: [
+      "SUPER_ADMIN",
+      "GENERAL_ADMIN",
+      "CASE_MANAGER",
+      "MISSION_VERIFIER",
+      "FINANCE_MANAGER"
+    ]
   })
-  @IsIn(["SUPER_ADMIN", "CASE_MANAGER", "VERIFIER", "FINANCE_MANAGER"])
-  role!: "SUPER_ADMIN" | "CASE_MANAGER" | "VERIFIER" | "FINANCE_MANAGER";
+  @IsIn([
+    "SUPER_ADMIN",
+    "GENERAL_ADMIN",
+    "CASE_MANAGER",
+    "MISSION_VERIFIER",
+    "FINANCE_MANAGER"
+  ])
+  role!:
+    | "SUPER_ADMIN"
+    | "GENERAL_ADMIN"
+    | "CASE_MANAGER"
+    | "MISSION_VERIFIER"
+    | "FINANCE_MANAGER";
 
   @ApiPropertyOptional({ maxLength: 120 })
   @IsOptional()

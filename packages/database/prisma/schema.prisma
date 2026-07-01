@@ -10,8 +10,9 @@ datasource db {
 
 enum StaffRole {
   SUPER_ADMIN
+  GENERAL_ADMIN
   CASE_MANAGER
-  VERIFIER
+  MISSION_VERIFIER
   FINANCE_MANAGER
 }
 
@@ -37,6 +38,12 @@ enum Urgency {
   NORMAL
   HIGH
   URGENT
+}
+
+enum SupplierVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 enum AuditAction {
@@ -68,8 +75,10 @@ model User {
   active        Boolean          @default(true)
   managedCases  Case[]           @relation("CaseManager")
   verifications Case[]           @relation("CaseVerifier")
+  verifiedSuppliers Supplier[]    @relation("SupplierVerifier")
   transitions   CaseTransition[]
   auditEvents   AuditEvent[]     @relation("AuditActor")
+  uploadedDocuments SupportingDocument[] @relation("UploadedDocuments")
   lastLoginAt   DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
@@ -95,22 +104,60 @@ model Beneficiary {
 }
 
 model Supplier {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  serviceType String
-  contactName String?
-  email       String?
-  phone       String?
-  city        String
-  region      String
-  notes       String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String                     @id @default(uuid()) @db.Uuid
+  name                 String
+  serviceType          String
+  contactName          String?
+  email                String?
+  phone                String?
+  city                 String
+  region               String
+  notes                String?
+  active               Boolean                    @default(true)
+  verificationStatus   SupplierVerificationStatus @default(PENDING)
+  verificationNotes    String?
+  verifiedAt           DateTime?
+  verifiedById         String?                    @db.Uuid
+  verifiedBy           User?                      @relation("SupplierVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
 
   @@index([name])
   @@index([serviceType])
   @@index([active])
+  @@index([verificationStatus])
+  @@index([verifiedById])
+}
+
+model RolePermission {
+  id         String    @id @default(uuid()) @db.Uuid
+  role       StaffRole
+  permission String
+  enabled    Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([role, permission])
+  @@index([role])
+  @@index([permission])
+}
+
+model SupportingDocument {
+  id           String   @id @default(uuid()) @db.Uuid
+  entityType   String
+  entityId     String   @db.Uuid
+  label        String?
+  originalName String
+  storedName   String
+  mimeType     String
+  sizeBytes    Int
+  storagePath  String
+  uploadedById String?  @db.Uuid
+  uploadedBy   User?    @relation("UploadedDocuments", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([uploadedById])
 }
 
 model Case {

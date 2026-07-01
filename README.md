@@ -5,7 +5,7 @@ This repository now contains the production application foundation and the valid
 ## Active MVP scope
 
 The production application is an internal tool for the Arukah team. It supports
-Super Admin, Case Manager, Verifier, and Finance Manager workflows in one
+Super Admin, General Admin, Case Manager, Mission Verifier, and Finance Manager workflows in one
 organization. Donor accounts, public marketplaces, white labeling, and
 multi-organization tenancy are future phases; prototype screens for those ideas
 are not part of the active backend scope.
@@ -100,9 +100,9 @@ The first database-backed case module is available under `/api/cases`:
 | `PATCH` | `/api/cases/:id` | Update intake details or assignments |
 | `DELETE` | `/api/cases/:id` | Delete a submitted case with no transition history |
 
-Workflow stage changes are intentionally excluded from CRUD updates. They will
-be handled by a dedicated transition endpoint with role checks and transition
-history.
+Workflow stage changes through CRUD updates are treated as exception overrides
+and are limited to Super Admin. Normal verification and payment movement uses
+the dedicated workflow endpoints with transition history.
 
 ### Basic staff authentication
 
@@ -116,8 +116,10 @@ bearer tokens:
 | `GET` | `/api/auth/me` | Return the authenticated staff identity |
 
 Set `AUTH_JWT_SECRET` and `AUTH_BOOTSTRAP_KEY` in `.env`. Both case mutations
-and reads require `Authorization: Bearer <token>`. Case creation, updates, and
-deletion are limited to Super Admin and Case Manager roles.
+and reads require `Authorization: Bearer <token>`. Super Admin owns staff
+account creation and workflow overrides; General Admin owns regular operations,
+including supplier, beneficiary, case, verification, payment, reconciliation,
+and report work.
 
 The Next.js application at `http://localhost:3000` includes the staff login
 screen. It sends credentials to `NEXT_PUBLIC_API_URL`, restores a saved session
@@ -126,6 +128,15 @@ clears the local session when the user signs out.
 
 The New Case dialog can select an existing beneficiary or create one inline,
 then submits the authenticated case intake to the API.
+
+### Access management
+
+Super Admin can use the Access module to manage a database-backed permission
+matrix for the five internal roles. Each role has checkboxes for software,
+staff accounts, workflow override, directory, beneficiary, case, verification,
+payment, reconciliation, and report capabilities. The MVP stores and displays
+these permissions; endpoint-level guards still use the current role rules until
+dynamic permission enforcement is enabled in a later hardening pass.
 
 ## Prototype
 
@@ -167,10 +178,11 @@ Then visit `http://localhost:8080`.
 - Impact reporting
 - JSON data export
 - Browser-local persistence through `localStorage`
-- Four internal staff roles with role-aware queues and permissions:
+- Five internal staff roles with role-aware queues and permissions:
   - Super Admin
+  - General Admin
   - Case Manager
-  - Verifier
+  - Mission Verifier
   - Finance Manager
 
 Beneficiaries and providers are represented as case participants during the pilot rather than authenticated platform users. Donor marketplace access is deliberately deferred until 50–100 real cases have validated the process.

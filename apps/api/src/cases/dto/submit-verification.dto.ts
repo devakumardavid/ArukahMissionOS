@@ -16,7 +16,7 @@ export class SubmitVerificationDto {
   outcome!: "APPROVE" | "REJECT" | "HOLD";
 
   @ApiProperty({
-    description: "Verifier recommendation notes",
+    description: "Mission verifier recommendation notes",
     minLength: 10,
     maxLength: 2000
   })

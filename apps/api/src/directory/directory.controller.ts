@@ -26,6 +26,7 @@ import { CreateSupplierDto } from "./dto/create-supplier.dto";
 import { CreateTeamMemberDto } from "./dto/create-team-member.dto";
 import { UpdateSupplierDto } from "./dto/update-supplier.dto";
 import { UpdateTeamMemberDto } from "./dto/update-team-member.dto";
+import { VerifySupplierDto } from "./dto/verify-supplier.dto";
 
 @ApiTags("directory")
 @ApiBearerAuth()
@@ -79,7 +80,7 @@ export class DirectoryController {
   }
 
   @Post("suppliers")
-  @Roles("SUPER_ADMIN", "FINANCE_MANAGER", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN")
   @ApiOperation({ summary: "Register a supplier or service provider" })
   @ApiCreatedResponse({ description: "Supplier registered" })
   createSupplier(
@@ -90,7 +91,7 @@ export class DirectoryController {
   }
 
   @Patch("suppliers/:id")
-  @Roles("SUPER_ADMIN", "FINANCE_MANAGER", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN")
   @ApiOperation({ summary: "Update a supplier or service provider" })
   updateSupplier(
     @Param("id", new ParseUUIDPipe()) id: string,
@@ -101,7 +102,7 @@ export class DirectoryController {
   }
 
   @Delete("suppliers/:id")
-  @Roles("SUPER_ADMIN", "FINANCE_MANAGER", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN")
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: "Supplier archived" })
   async archiveSupplier(
@@ -109,5 +110,16 @@ export class DirectoryController {
     @CurrentUser() user: AuthenticatedUser
   ) {
     await this.directory.setSupplierActive(id, false, user.id);
+  }
+
+  @Post("suppliers/:id/verification")
+  @Roles("GENERAL_ADMIN")
+  @ApiOperation({ summary: "Verify or reject a supplier or service provider" })
+  verifySupplier(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() input: VerifySupplierDto,
+    @CurrentUser() user: AuthenticatedUser
+  ): Promise<SupplierResponse> {
+    return this.directory.verifySupplier(id, input, user.id);
   }
 }
