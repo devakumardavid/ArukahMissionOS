@@ -44,7 +44,7 @@ export class CasesController {
   @ApiOperation({ summary: "Create a case" })
   @ApiCreatedResponse({ description: "Case created" })
   @ApiUnprocessableEntityResponse({ description: "Invalid beneficiary or assignee" })
-  @Roles("SUPER_ADMIN", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN", "CASE_MANAGER")
   create(
     @Body() input: CreateCaseDto,
     @CurrentUser() user: AuthenticatedUser
@@ -66,7 +66,7 @@ export class CasesController {
   }
 
   @Patch(":id")
-  @Roles("SUPER_ADMIN", "CASE_MANAGER")
+  @Roles("SUPER_ADMIN", "GENERAL_ADMIN", "CASE_MANAGER")
   @ApiOperation({ summary: "Update case intake details or assignments" })
   @ApiNotFoundResponse({ description: "Case not found" })
   update(
@@ -78,7 +78,7 @@ export class CasesController {
   }
 
   @Post(":id/verification")
-  @Roles("SUPER_ADMIN", "VERIFIER")
+  @Roles("GENERAL_ADMIN", "MISSION_VERIFIER")
   @ApiOperation({ summary: "Submit a verification recommendation" })
   @ApiNotFoundResponse({ description: "Case not found" })
   @ApiUnprocessableEntityResponse({ description: "Invalid verification recommendation" })
@@ -91,7 +91,7 @@ export class CasesController {
   }
 
   @Post(":id/payment")
-  @Roles("SUPER_ADMIN", "FINANCE_MANAGER")
+  @Roles("GENERAL_ADMIN", "FINANCE_MANAGER")
   @ApiOperation({ summary: "Record a payment and move the case to impact follow-up" })
   @ApiNotFoundResponse({ description: "Case not found" })
   @ApiUnprocessableEntityResponse({ description: "Invalid payment record" })
@@ -108,7 +108,7 @@ export class CasesController {
   @ApiOperation({ summary: "Delete a newly submitted case without workflow history" })
   @ApiNoContentResponse({ description: "Case deleted" })
   @ApiNotFoundResponse({ description: "Case not found" })
-  @Roles("SUPER_ADMIN", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN", "CASE_MANAGER")
   async remove(
     @Param("id", new ParseUUIDPipe()) id: string,
     @CurrentUser() user: AuthenticatedUser

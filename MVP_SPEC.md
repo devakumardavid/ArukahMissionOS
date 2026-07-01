@@ -8,16 +8,25 @@ Phase 1 is an internal-use case-management platform. It is not a donor marketpla
 
 ### Super Admin
 
-- Manage staff accounts and roles
+- Manage the software application and Super Admin accounts
+- Create, edit, and deactivate staff login accounts
+- Override a case from one workflow status to another when an exception requires it
 - Configure categories, thresholds, and workflow settings
 - View all cases and reports
 - Review audit activity
 - Intervene in exceptional cases
 
+### General Admin
+
+- Manage regular operations across beneficiaries, cases, suppliers, verification, payments, reconciliation, and reports
+- Maintain suppliers, providers, and payees
+- Maintain setup data needed by case and payment workflows
+- Coordinate operational handoffs across roles
+
 ### Case Manager
 
 - Create and update beneficiary records
-- Create cases and request documents
+- Submit cases and request documents
 - Assign verification work
 - Review verification recommendations
 - Approve or reject within authority limits
@@ -25,7 +34,7 @@ Phase 1 is an internal-use case-management platform. It is not a donor marketpla
 - Track delivery and impact
 - Close cases
 
-### Verifier
+### Mission Verifier
 
 - View assigned cases
 - Review identity and supporting documents
@@ -39,6 +48,7 @@ Phase 1 is an internal-use case-management platform. It is not a donor marketpla
 
 - View approved cases with selected providers
 - Review invoice and approval information
+- Approve payments
 - Record direct provider payment
 - Store UTR/payment reference
 - Match payment to invoice
@@ -53,7 +63,7 @@ Phase 1 is an internal-use case-management platform. It is not a donor marketpla
    - Required documents identified
 
 2. **Verification**
-   - Verifier assigned
+   - Mission Verifier assigned
    - Identity, income, need, amount, and provider evidence reviewed
    - Duplicate and risk checks recorded
    - Recommendation submitted
@@ -112,7 +122,7 @@ The detailed requirements and acceptance criteria for these areas are maintained
 - Category and urgency
 - Requested and approved amounts
 - Current lifecycle state
-- Assigned case manager and verifier
+- Assigned case manager and mission verifier
 - Target dates
 - Internal notes and tasks
 - Complete transition history
@@ -177,7 +187,7 @@ A real case can be considered fully supported when:
 
 - Staff can create it and assign responsible users.
 - Required documents can be uploaded and reviewed securely.
-- A verifier can complete a checklist and recommendation.
+- A mission verifier can complete a checklist and recommendation.
 - An authorized user can approve or reject with a reason.
 - A validated provider and invoice can be selected.
 - Finance can record and reconcile direct payment.

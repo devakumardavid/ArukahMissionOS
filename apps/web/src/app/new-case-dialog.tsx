@@ -15,6 +15,10 @@ import {
   listIndiaCities,
   listIndiaStates
 } from "../lib/cases";
+import {
+  filesFromForm,
+  uploadSupportingDocuments
+} from "../lib/supporting-documents";
 
 type NewCaseDialogProps = {
   session: AuthSession;
@@ -68,6 +72,8 @@ export function NewCaseDialog({
 
     try {
       let selectedBeneficiaryId = beneficiaryId;
+      const beneficiaryDocuments = filesFromForm(form, "beneficiaryDocuments");
+      const caseDocuments = filesFromForm(form, "caseDocuments");
 
       if (createNewBeneficiary) {
         const beneficiary = await createBeneficiary(session, {
@@ -97,6 +103,26 @@ export function NewCaseDialog({
         urgency: String(form.get("urgency")) as "NORMAL" | "HIGH" | "URGENT",
         caseManagerId: session.user.id
       });
+
+      if (beneficiaryDocuments.length) {
+        await uploadSupportingDocuments(
+          session,
+          "BENEFICIARY",
+          selectedBeneficiaryId,
+          beneficiaryDocuments,
+          "Beneficiary supporting document"
+        );
+      }
+
+      if (caseDocuments.length) {
+        await uploadSupportingDocuments(
+          session,
+          "CASE",
+          created.id,
+          caseDocuments,
+          "Case supporting document"
+        );
+      }
 
       onCreated(created);
     } catch (caught) {
@@ -189,6 +215,10 @@ export function NewCaseDialog({
                 <input name="country" type="hidden" value="IN" />
               </>
             ) : null}
+            <label className="field-full">Beneficiary supporting documents
+              <input accept="image/*,.pdf,application/pdf" multiple name="beneficiaryDocuments" type="file" />
+              <small>Upload beneficiary ID, income proof, address proof, or family documents as images/PDF.</small>
+            </label>
           </fieldset>
 
           <fieldset>
@@ -206,6 +236,10 @@ export function NewCaseDialog({
             <label>Requested amount<input min="0.01" name="amount" required step="0.01" type="number" /></label>
             <label>Currency<input defaultValue="INR" maxLength={3} minLength={3} name="currency" required /></label>
             <label className="field-full">Description<textarea minLength={20} name="description" required rows={4} /></label>
+            <label className="field-full">Case supporting documents
+              <input accept="image/*,.pdf,application/pdf" multiple name="caseDocuments" type="file" />
+              <small>Upload estimates, invoices, prescriptions, school fee letters, or other need evidence.</small>
+            </label>
           </fieldset>
 
           {error ? <div className="form-error field-full" role="alert">{error}</div> : null}

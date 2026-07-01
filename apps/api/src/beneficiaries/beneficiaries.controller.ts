@@ -33,7 +33,7 @@ export class BeneficiariesController {
   constructor(private readonly beneficiaries: BeneficiariesService) {}
 
   @Post()
-  @Roles("SUPER_ADMIN", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN", "CASE_MANAGER")
   @ApiOperation({ summary: "Create a beneficiary" })
   @ApiCreatedResponse({ description: "Beneficiary created" })
   create(
@@ -58,7 +58,7 @@ export class BeneficiariesController {
   }
 
   @Patch(":id")
-  @Roles("SUPER_ADMIN", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN", "CASE_MANAGER")
   @ApiOperation({ summary: "Update beneficiary details" })
   update(
     @Param("id", new ParseUUIDPipe()) id: string,
@@ -70,7 +70,7 @@ export class BeneficiariesController {
 
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles("SUPER_ADMIN", "CASE_MANAGER")
+  @Roles("GENERAL_ADMIN", "CASE_MANAGER")
   @ApiOperation({ summary: "Archive a beneficiary" })
   async remove(
     @Param("id", new ParseUUIDPipe()) id: string,

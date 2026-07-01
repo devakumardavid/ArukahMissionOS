@@ -3,6 +3,7 @@ import { Prisma } from "@arukah/database";
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException
@@ -49,7 +50,12 @@ const caseInclude = {
 } satisfies Prisma.CaseInclude;
 
 type CaseRecord = Prisma.CaseGetPayload<{ include: typeof caseInclude }>;
-type StaffRole = "SUPER_ADMIN" | "CASE_MANAGER" | "VERIFIER" | "FINANCE_MANAGER";
+type StaffRole =
+  | "SUPER_ADMIN"
+  | "GENERAL_ADMIN"
+  | "CASE_MANAGER"
+  | "MISSION_VERIFIER"
+  | "FINANCE_MANAGER";
 type CaseStage =
   | "SUBMITTED"
   | "VERIFICATION"
@@ -230,6 +236,11 @@ export class CasesService {
 
     await this.validateReferences(input);
     const stageChanged = input.stage !== undefined && input.stage !== existing.stage;
+
+    if (stageChanged) {
+      await this.ensureWorkflowOverrideAllowed(actorUserId);
+    }
+
     const updated = await this.database.prisma.$transaction(async (transaction) => {
       const caseRecord = await transaction.case.update({
         where: { id },
@@ -499,7 +510,7 @@ export class CasesService {
 
     await Promise.all([
       this.validateAssignee(input.caseManagerId, ["CASE_MANAGER", "SUPER_ADMIN"], "case manager"),
-      this.validateAssignee(input.verifierId, ["VERIFIER", "SUPER_ADMIN"], "verifier")
+      this.validateAssignee(input.verifierId, ["MISSION_VERIFIER", "SUPER_ADMIN"], "mission verifier")
     ]);
   }
 
@@ -519,6 +530,17 @@ export class CasesService {
 
     if (!user || !user.active || !allowedRoles.includes(user.role)) {
       throw new UnprocessableEntityException(`Invalid ${label}`);
+    }
+  }
+
+  private async ensureWorkflowOverrideAllowed(actorUserId: string) {
+    const actor = await this.database.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { role: true, active: true }
+    });
+
+    if (!actor?.active || actor.role !== "SUPER_ADMIN") {
+      throw new ForbiddenException("Only Super Admin can override case status directly");
     }
   }
 

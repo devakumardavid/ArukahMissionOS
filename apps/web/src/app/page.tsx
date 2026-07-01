@@ -33,19 +33,40 @@ import {
 import { LoginScreen } from "./login-screen";
 import { NewCaseDialog } from "./new-case-dialog";
 import {
+  getAccessManagementMatrix,
+  updateRolePermissions,
+  type AccessManagementMatrix
+} from "../lib/access-management";
+import {
+  filesFromForm,
+  uploadSupportingDocuments
+} from "../lib/supporting-documents";
+import {
   createSupplier,
   createTeamMember,
+  deleteSupplier,
+  deleteTeamMember,
   listSuppliers,
   listTeamMembers,
+  updateSupplier,
+  updateTeamMember,
+  verifySupplier,
   type Supplier,
   type SupplierInput,
+  type SupplierUpdateInput,
+  type SupplierVerificationInput,
   type TeamMember,
-  type TeamMemberInput
+  type TeamMemberInput,
+  type TeamMemberUpdateInput
 } from "../lib/directory";
 
-type View = "dashboard" | "directory" | "beneficiaries" | "cases" | "verification" | "payments" | "reports";
-type Role = "Super Admin" | "Case Manager" | "Verifier" | "Finance Manager";
+type View = "dashboard" | "access" | "directory" | "beneficiaries" | "cases" | "verification" | "payments" | "reports";
+type Role = "Super Admin" | "General Admin" | "Case Manager" | "Mission Verifier" | "Finance Manager";
 type CaseListTab = "active" | "mine" | "closed" | "all";
+type UserNotice = {
+  message: string;
+  tone: "success" | "info" | "error";
+};
 type CaseAdvancedFilters = {
   category: string;
   stage: string;
@@ -54,6 +75,7 @@ type CaseAdvancedFilters = {
 
 const navItems: Array<{ id: View; label: string; icon: IconName; badge?: number }> = [
   { id: "dashboard", label: "Dashboard", icon: "grid" },
+  { id: "access", label: "Access", icon: "complete" },
   { id: "directory", label: "Directory", icon: "people" },
   { id: "beneficiaries", label: "Beneficiaries", icon: "people" },
   { id: "cases", label: "Cases", icon: "folder", badge: 8 },
@@ -76,16 +98,18 @@ type CaseTableItem = {
 };
 
 const roleDescriptions: Record<Role, string> = {
-  "Super Admin": "Full operational overview",
-  "Case Manager": "Intake and case coordination",
-  Verifier: "Assigned verification queue",
-  "Finance Manager": "Payments and reconciliation"
+  "Super Admin": "Accounts, access, and workflow overrides",
+  "General Admin": "Full regular operations management",
+  "Case Manager": "Case submission and closure",
+  "Mission Verifier": "Beneficiary and need verification",
+  "Finance Manager": "Payment approval and reconciliation"
 };
 
 const roleLabels: Record<StaffRole, Role> = {
   SUPER_ADMIN: "Super Admin",
+  GENERAL_ADMIN: "General Admin",
   CASE_MANAGER: "Case Manager",
-  VERIFIER: "Verifier",
+  MISSION_VERIFIER: "Mission Verifier",
   FINANCE_MANAGER: "Finance Manager"
 };
 
@@ -160,6 +184,14 @@ function MissionWorkspace({
   const [directoryLoading, setDirectoryLoading] = useState(true);
   const [directoryError, setDirectoryError] = useState("");
   const [directoryPanel, setDirectoryPanel] = useState<"team" | "supplier" | null>(null);
+  const [accessMatrix, setAccessMatrix] = useState<AccessManagementMatrix | null>(null);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessError, setAccessError] = useState("");
+  const [selectedDirectoryRecord, setSelectedDirectoryRecord] = useState<{
+    id: string;
+    mode: "view" | "edit";
+    type: "team" | "supplier";
+  } | null>(null);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string | null>(null);
   const [beneficiaryPanelMode, setBeneficiaryPanelMode] = useState<"view" | "edit" | "create">("view");
   const [categories, setCategories] = useState<CaseCategory[]>([]);
@@ -179,7 +211,7 @@ function MissionWorkspace({
   const [selectedVerificationCaseId, setSelectedVerificationCaseId] = useState<string | null>(null);
   const [selectedPaymentCaseId, setSelectedPaymentCaseId] = useState<string | null>(null);
   const [newCaseOpen, setNewCaseOpen] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<UserNotice | null>(null);
   const role = roleLabels[session.user.role];
   const firstName = session.user.displayName.trim().split(/\s+/)[0] ?? "Team";
   const initials = session.user.displayName
@@ -259,6 +291,15 @@ function MissionWorkspace({
     [caseRecords, session.user.id]
   );
 
+  function showNotice(
+    message: string,
+    tone: UserNotice["tone"] = "success",
+    duration = 4000
+  ) {
+    setNotice({ message, tone });
+    window.setTimeout(() => setNotice(null), duration);
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -312,9 +353,8 @@ function MissionWorkspace({
     if (!created) return;
 
     setActiveView("cases");
-    setNotice(`${created} was created successfully.`);
+    showNotice(`${created} was created successfully.`);
     window.history.replaceState(null, "", window.location.pathname);
-    window.setTimeout(() => setNotice(""), 4000);
   }, []);
 
   async function refreshCasesFromApi() {
@@ -332,13 +372,37 @@ function MissionWorkspace({
     }
   }
 
+  async function refreshAccessMatrix() {
+    if (session.user.role !== "SUPER_ADMIN") return;
+
+    setAccessLoading(true);
+    setAccessError("");
+
+    try {
+      setAccessMatrix(await getAccessManagementMatrix(session));
+    } catch (caught) {
+      setAccessError(caught instanceof Error ? caught.message : "Unable to load access management");
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
   function navigate(view: View) {
+    if (view === "access" && session.user.role !== "SUPER_ADMIN") {
+      showNotice("Only Super Admin can manage access.", "info");
+      return;
+    }
+
     setActiveView(view);
     setMenuOpen(false);
     setQuery("");
 
     if (["dashboard", "cases", "verification", "payments"].includes(view)) {
       void refreshCasesFromApi();
+    }
+
+    if (view === "access") {
+      void refreshAccessMatrix();
     }
   }
 
@@ -350,8 +414,7 @@ function MissionWorkspace({
     ]);
     setNewCaseOpen(false);
     setActiveView("cases");
-    setNotice(`${created.caseNumber} was created successfully.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${created.caseNumber} was created successfully.`);
   }
 
   function handleOpenCase(id: string, mode: "view" | "edit" = "view") {
@@ -374,8 +437,7 @@ function MissionWorkspace({
       await deleteCase(session, caseRecord.id);
       handleCaseDeleted(caseRecord.id, caseRecord.caseNumber);
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "Unable to delete case");
-      window.setTimeout(() => setNotice(""), 5000);
+      showNotice(caught instanceof Error ? caught.message : "Unable to delete case", "error", 5000);
     }
   }
 
@@ -389,8 +451,7 @@ function MissionWorkspace({
       )
     );
     setSelectedCaseId(updated.id);
-    setNotice(`${updated.caseNumber} was updated successfully.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${updated.caseNumber} was updated successfully.`);
   }
 
   async function handleVerificationSubmitted(
@@ -400,40 +461,132 @@ function MissionWorkspace({
     const updated = await submitVerification(session, caseId, input);
     handleCaseUpdated(updated);
     setSelectedVerificationCaseId(null);
-    setNotice(`${updated.caseNumber} verification was submitted.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${updated.caseNumber} moved to the payment queue.`);
   }
 
   async function handlePaymentSubmitted(caseId: string, input: PaymentInput) {
     const updated = await submitPayment(session, caseId, input);
     handleCaseUpdated(updated);
     setSelectedPaymentCaseId(null);
-    setNotice(`${updated.caseNumber} payment was recorded.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${updated.caseNumber} payment was recorded and moved to impact follow-up.`);
   }
 
-  async function handleTeamMemberCreated(input: TeamMemberInput) {
+  async function handleTeamMemberCreated(input: TeamMemberInput, documents: File[] = []) {
     const created = await createTeamMember(session, input);
+    if (documents.length) {
+      await uploadSupportingDocuments(session, "TEAM_MEMBER", created.id, documents, "Team member supporting document");
+    }
     setTeamMembers((current) => [created, ...current]);
     setDirectoryPanel(null);
-    setNotice(`${created.displayName} was registered.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${created.displayName} was registered.`);
   }
 
-  async function handleSupplierCreated(input: SupplierInput) {
+  function openDirectoryRecord(type: "team" | "supplier", id: string, mode: "view" | "edit" = "view") {
+    setSelectedDirectoryRecord({ id, mode, type });
+  }
+
+  async function handleTeamMemberUpdated(id: string, input: TeamMemberUpdateInput, documents: File[] = []) {
+    const updated = await updateTeamMember(session, id, input);
+    if (documents.length) {
+      await uploadSupportingDocuments(session, "TEAM_MEMBER", id, documents, "Team member supporting document");
+    }
+    setTeamMembers((current) => current.map((item) => (item.id === id ? updated : item)));
+    setSelectedDirectoryRecord({ id, mode: "view", type: "team" });
+    showNotice(`${updated.displayName} was updated.`);
+  }
+
+  async function handleSupplierUpdated(id: string, input: SupplierUpdateInput, documents: File[] = []) {
+    const updated = await updateSupplier(session, id, input);
+    if (documents.length) {
+      await uploadSupportingDocuments(session, "SUPPLIER", id, documents, "Supplier supporting document");
+    }
+    setSuppliers((current) => current.map((item) => (item.id === id ? updated : item)));
+    setSelectedDirectoryRecord({ id, mode: "view", type: "supplier" });
+    showNotice(`${updated.name} was updated.`);
+  }
+
+  async function handleSupplierVerified(id: string, input: SupplierVerificationInput) {
+    const updated = await verifySupplier(session, id, input);
+    setSuppliers((current) => current.map((item) => (item.id === id ? updated : item)));
+    setSelectedDirectoryRecord({ id, mode: "view", type: "supplier" });
+    showNotice(
+      input.status === "VERIFIED"
+        ? `${updated.name} was verified as a service provider.`
+        : `${updated.name} was marked as not verified.`,
+      input.status === "VERIFIED" ? "success" : "info"
+    );
+  }
+
+  async function handleDeleteTeamMember(id: string) {
+    const teamMember = teamMembers.find((item) => item.id === id);
+
+    if (!teamMember) return;
+
+    const confirmed = window.confirm(`Delete ${teamMember.displayName}? This will deactivate the team member.`);
+    if (!confirmed) return;
+
+    try {
+      await deleteTeamMember(session, id);
+      setTeamMembers((current) => current.filter((item) => item.id !== id));
+      setSelectedDirectoryRecord(null);
+      showNotice(`${teamMember.displayName} was deleted.`);
+    } catch (caught) {
+      showNotice(caught instanceof Error ? caught.message : "Unable to delete team member", "error", 5000);
+    }
+  }
+
+  async function handleDeleteSupplier(id: string) {
+    const supplier = suppliers.find((item) => item.id === id);
+
+    if (!supplier) return;
+
+    const confirmed = window.confirm(`Delete ${supplier.name}? This will archive the supplier.`);
+    if (!confirmed) return;
+
+    try {
+      await deleteSupplier(session, id);
+      setSuppliers((current) => current.filter((item) => item.id !== id));
+      setSelectedDirectoryRecord(null);
+      showNotice(`${supplier.name} was deleted.`);
+    } catch (caught) {
+      showNotice(caught instanceof Error ? caught.message : "Unable to delete supplier", "error", 5000);
+    }
+  }
+
+  async function handleSupplierCreated(input: SupplierInput, documents: File[] = []) {
     const created = await createSupplier(session, input);
+    if (documents.length) {
+      await uploadSupportingDocuments(session, "SUPPLIER", created.id, documents, "Supplier supporting document");
+    }
     setSuppliers((current) => [created, ...current]);
     setDirectoryPanel(null);
-    setNotice(`${created.name} was registered.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${created.name} was registered.`);
+  }
+
+  async function handleSaveRolePermissions(
+    roleKey: StaffRole,
+    permissions: Record<string, boolean>
+  ) {
+    setAccessLoading(true);
+    setAccessError("");
+
+    try {
+      const updated = await updateRolePermissions(session, roleKey, permissions);
+      setAccessMatrix(updated);
+      showNotice(`${roleLabels[roleKey]} access was updated.`);
+    } catch (caught) {
+      setAccessError(caught instanceof Error ? caught.message : "Unable to update access");
+      showNotice(caught instanceof Error ? caught.message : "Unable to update access", "error", 5000);
+    } finally {
+      setAccessLoading(false);
+    }
   }
 
   function handleCaseDeleted(deletedId: string, caseNumber: string) {
     setCaseRecords((current) => current.filter((item) => item.id !== deletedId));
     setCaseItems((current) => current.filter((item) => item.recordId !== deletedId));
     setSelectedCaseId(null);
-    setNotice(`${caseNumber} was deleted.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${caseNumber} was deleted.`);
   }
 
   function openBeneficiary(id: string, mode: "view" | "edit" = "view") {
@@ -446,7 +599,11 @@ function MissionWorkspace({
     setBeneficiaryPanelMode("create");
   }
 
-  function handleBeneficiarySaved(saved: Beneficiary) {
+  async function handleBeneficiarySaved(saved: Beneficiary, documents: File[] = []) {
+    if (documents.length) {
+      await uploadSupportingDocuments(session, "BENEFICIARY", saved.id, documents, "Beneficiary supporting document");
+    }
+
     setBeneficiaryRecords((current) => {
       const exists = current.some((item) => item.id === saved.id);
       return exists
@@ -455,8 +612,7 @@ function MissionWorkspace({
     });
     setSelectedBeneficiaryId(saved.id);
     setBeneficiaryPanelMode("view");
-    setNotice(`${saved.preferredName} was saved successfully.`);
-    window.setTimeout(() => setNotice(""), 4000);
+    showNotice(`${saved.preferredName} was saved successfully.`);
   }
 
   async function handleArchiveBeneficiary(id: string) {
@@ -471,11 +627,9 @@ function MissionWorkspace({
       await archiveBeneficiary(session, id);
       setBeneficiaryRecords((current) => current.filter((item) => item.id !== id));
       setSelectedBeneficiaryId(null);
-      setNotice(`${beneficiary.preferredName} was deleted.`);
-      window.setTimeout(() => setNotice(""), 4000);
+      showNotice(`${beneficiary.preferredName} was deleted.`);
     } catch (caught) {
-      setNotice(caught instanceof Error ? caught.message : "Unable to delete beneficiary");
-      window.setTimeout(() => setNotice(""), 5000);
+      showNotice(caught instanceof Error ? caught.message : "Unable to delete beneficiary", "error", 5000);
     }
   }
 
@@ -492,7 +646,9 @@ function MissionWorkspace({
 
         <nav className="navigation" aria-label="Main navigation">
           <span className="nav-label">Workspace</span>
-          {navItems.map((item) => {
+          {navItems
+            .filter((item) => item.id !== "access" || session.user.role === "SUPER_ADMIN")
+            .map((item) => {
             const liveBadge =
               item.id === "cases"
                 ? caseCounts.active
@@ -566,12 +722,25 @@ function MissionWorkspace({
 
         <div className="content">
           {activeView === "dashboard" && <Dashboard role={role} firstName={firstName} onNavigate={navigate} caseRecords={caseRecords} cases={visibleCases} casesLoading={casesLoading} onDeleteCase={handleDeleteCase} onOpenCase={handleOpenCase} />}
+          {activeView === "access" && (
+            <AccessManagementView
+              accessMatrix={accessMatrix}
+              error={accessError}
+              loading={accessLoading}
+              onRefresh={refreshAccessMatrix}
+              onSaveRole={handleSaveRolePermissions}
+            />
+          )}
           {activeView === "directory" && (
             <DirectoryView
+              currentRole={session.user.role}
               error={directoryError}
               loading={directoryLoading}
               onNewSupplier={() => setDirectoryPanel("supplier")}
               onNewTeamMember={() => setDirectoryPanel("team")}
+              onDeleteSupplier={handleDeleteSupplier}
+              onDeleteTeamMember={handleDeleteTeamMember}
+              onOpen={openDirectoryRecord}
               suppliers={suppliers}
               teamMembers={teamMembers}
             />
@@ -640,7 +809,7 @@ function MissionWorkspace({
           )}
         </div>
       </main>
-      {notice ? <div className="success-toast" role="status">{notice}</div> : null}
+      {notice ? <div className={`user-toast ${notice.tone}`} role="status">{notice.message}</div> : null}
       {newCaseOpen ? (
         <NewCaseDialog
           onClose={() => setNewCaseOpen(false)}
@@ -679,6 +848,24 @@ function MissionWorkspace({
           onClose={() => setDirectoryPanel(null)}
           onCreateSupplier={handleSupplierCreated}
           onCreateTeamMember={handleTeamMemberCreated}
+        />
+      ) : null}
+      {selectedDirectoryRecord ? (
+        <DirectoryDetailPanel
+          currentRole={session.user.role}
+          initialMode={selectedDirectoryRecord.mode}
+          item={
+            selectedDirectoryRecord.type === "team"
+              ? teamMembers.find((item) => item.id === selectedDirectoryRecord.id) ?? null
+              : suppliers.find((item) => item.id === selectedDirectoryRecord.id) ?? null
+          }
+          onClose={() => setSelectedDirectoryRecord(null)}
+          onDeleteSupplier={handleDeleteSupplier}
+          onDeleteTeamMember={handleDeleteTeamMember}
+          onVerifySupplier={handleSupplierVerified}
+          onUpdateSupplier={handleSupplierUpdated}
+          onUpdateTeamMember={handleTeamMemberUpdated}
+          type={selectedDirectoryRecord.type}
         />
       ) : null}
       {beneficiaryPanelMode === "create" || selectedBeneficiaryId ? (
@@ -752,6 +939,16 @@ function formatStage(stage: CreatedCase["stage"]) {
   };
 
   return labels[stage] ?? stage;
+}
+
+function formatSupplierVerificationStatus(status: Supplier["verificationStatus"]) {
+  const labels: Record<Supplier["verificationStatus"], string> = {
+    PENDING: "Pending verification",
+    REJECTED: "Not verified",
+    VERIFIED: "Verified"
+  };
+
+  return labels[status];
 }
 
 function formatUpdated(value: string | Date | undefined) {
@@ -1008,6 +1205,11 @@ function Dashboard({
         title={`Good morning, ${firstName}.`}
         description={`${roleDescriptions[role]}. Here is what needs attention across Arukah today.`}
       />
+      <UserMessage
+        icon="complete"
+        message="Start with the highest-priority queue. Verification and payment work should move through their workflow buttons so the audit trail stays clear."
+        title="Today’s operating message"
+      />
 
       <section className="stat-grid">
         <Stat label="Active cases" value={String(activeCases.length)} detail={casesLoading ? "Loading…" : "From live database"} tone="green" icon="folder" />
@@ -1138,6 +1340,11 @@ function CasesView({
         </button>
         <a className="primary-button" href="/cases/new"><Icon name="plus" /> New case</a>
       </PageHeading>
+      <UserMessage
+        icon="filter"
+        message="Use Active, My cases, Closed, and All cases to narrow the list. Open a case to view details; edit only when intake data needs correction."
+        title="Working with cases"
+      />
       <div className="view-tabs">
         {tabs.map((tab) => (
           <button
@@ -1207,25 +1414,189 @@ function CasesView({
   );
 }
 
+function AccessManagementView({
+  accessMatrix,
+  error,
+  loading,
+  onRefresh,
+  onSaveRole
+}: {
+  accessMatrix: AccessManagementMatrix | null;
+  error: string;
+  loading: boolean;
+  onRefresh: () => void;
+  onSaveRole: (roleKey: StaffRole, permissions: Record<string, boolean>) => Promise<void>;
+}) {
+  const [draftMatrix, setDraftMatrix] = useState<AccessManagementMatrix["matrix"] | null>(null);
+
+  useEffect(() => {
+    if (!accessMatrix && !loading && !error) {
+      onRefresh();
+    }
+  }, [accessMatrix, error, loading, onRefresh]);
+
+  useEffect(() => {
+    if (!accessMatrix) return;
+
+    setDraftMatrix(
+      Object.fromEntries(
+        accessMatrix.roles.map((role) => [
+          role.key,
+          { ...(accessMatrix.matrix[role.key] ?? {}) }
+        ])
+      ) as AccessManagementMatrix["matrix"]
+    );
+  }, [accessMatrix]);
+
+  function togglePermission(roleKey: StaffRole, permissionKey: string) {
+    setDraftMatrix((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        [roleKey]: {
+          ...current[roleKey],
+          [permissionKey]: !current[roleKey]?.[permissionKey]
+        }
+      };
+    });
+  }
+
+  function enabledPermissionCount(roleKey: StaffRole) {
+    return Object.values(draftMatrix?.[roleKey] ?? {}).filter(Boolean).length;
+  }
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="Access management"
+        title="Role permissions"
+        description="Use checkboxes to decide what each Arukah role can do. Super Admin controls this matrix."
+      >
+        <button className="secondary-button" disabled={loading} onClick={onRefresh} type="button">
+          <Icon name="clock" /> Refresh
+        </button>
+      </PageHeading>
+      <UserMessage
+        icon="complete"
+        message="Tick the permissions a role should have, then save that specific role. Super Admin keeps account creation, access control, and workflow override powers."
+        title="Permission changes affect role behavior"
+        tone="warning"
+      />
+
+      {error ? <div className="panel"><div className="empty-state"><Icon name="search" /><h3>Unable to load access</h3><p>{error}</p></div></div> : null}
+      {loading && !accessMatrix ? <div className="panel"><div className="empty-state"><Icon name="clock" /><h3>Loading access matrix…</h3><p>Reading role permissions from the API.</p></div></div> : null}
+
+      {!loading && !error && !accessMatrix ? (
+        <div className="panel">
+          <div className="empty-state">
+            <Icon name="complete" />
+            <h3>Access matrix not loaded</h3>
+            <p>Refresh the access module to load permission checkboxes.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {accessMatrix && draftMatrix ? (
+        <section className="panel access-panel">
+          <div className="access-role-summary">
+            {accessMatrix.roles.map((role) => (
+              <article className="access-role-card" key={role.key}>
+                <span>{role.label}</span>
+                <strong>{enabledPermissionCount(role.key)}</strong>
+                <small>{roleDescriptions[roleLabels[role.key]]}</small>
+              </article>
+            ))}
+          </div>
+
+          <div className="access-table-wrap">
+            <table className="access-table">
+              <thead>
+                <tr>
+                  <th>Permission</th>
+                  {accessMatrix.roles.map((role) => (
+                    <th key={role.key}>
+                      <span>{role.label}</span>
+                      <small>{roleDescriptions[roleLabels[role.key]]}</small>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {accessMatrix.permissions.map((permission) => (
+                  <tr key={permission.key}>
+                    <td>
+                      <strong>{permission.label}</strong>
+                      <small>{permission.description}</small>
+                    </td>
+                    {accessMatrix.roles.map((role) => (
+                      <td key={`${role.key}-${permission.key}`}>
+                        <label className="access-checkbox">
+                          <input
+                            aria-label={`${role.label}: ${permission.label}`}
+                            checked={Boolean(draftMatrix[role.key]?.[permission.key])}
+                            disabled={loading || (role.key === "SUPER_ADMIN" && permission.key === "access.manage")}
+                            onChange={() => togglePermission(role.key, permission.key)}
+                            type="checkbox"
+                          />
+                        </label>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="access-save-row">
+            {accessMatrix.roles.map((role) => (
+              <button
+                className="secondary-button"
+                disabled={loading}
+                key={role.key}
+                onClick={() => onSaveRole(role.key, draftMatrix[role.key])}
+                type="button"
+              >
+                {loading ? "Saving…" : `Save ${role.label}`}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 function DirectoryView({
+  currentRole,
   error,
   loading,
   onNewSupplier,
   onNewTeamMember,
+  onDeleteSupplier,
+  onDeleteTeamMember,
+  onOpen,
   suppliers,
   teamMembers
 }: {
+  currentRole: StaffRole;
   error: string;
   loading: boolean;
+  onDeleteSupplier: (id: string) => void;
+  onDeleteTeamMember: (id: string) => void;
   onNewSupplier: () => void;
   onNewTeamMember: () => void;
+  onOpen: (type: "team" | "supplier", id: string, mode?: "view" | "edit") => void;
   suppliers: Supplier[];
   teamMembers: TeamMember[];
 }) {
   const activeTeam = teamMembers.filter((item) => item.active);
   const activeSuppliers = suppliers.filter((item) => item.active);
-  const verifierCount = activeTeam.filter((item) => item.role === "VERIFIER").length;
+  const verifiedSuppliers = activeSuppliers.filter((item) => item.verificationStatus === "VERIFIED");
+  const verifierCount = activeTeam.filter((item) => item.role === "MISSION_VERIFIER").length;
   const associateCount = activeTeam.filter((item) => item.staffType === "ASSOCIATE").length;
+  const canManageTeam = currentRole === "SUPER_ADMIN";
+  const canManageSuppliers = currentRole === "GENERAL_ADMIN";
 
   return (
     <>
@@ -1234,14 +1605,23 @@ function DirectoryView({
         title="Team, associates, and suppliers"
         description="Register the people and providers who submit, verify, manage, and fulfill cases."
       >
-        <button className="secondary-button" onClick={onNewSupplier} type="button"><Icon name="plus" /> New supplier</button>
-        <button className="primary-button" onClick={onNewTeamMember} type="button"><Icon name="plus" /> New team member</button>
+        {canManageSuppliers ? <button className="secondary-button" onClick={onNewSupplier} type="button"><Icon name="plus" /> New supplier</button> : null}
+        {canManageTeam ? <button className="primary-button" onClick={onNewTeamMember} type="button"><Icon name="plus" /> New team member</button> : null}
       </PageHeading>
+      <UserMessage
+        icon="people"
+        message={canManageTeam
+          ? "As Super Admin, you can create and manage staff accounts. Supplier setup is handled by General Admin."
+          : canManageSuppliers
+            ? "As General Admin, you can manage suppliers and providers. Staff account changes are reserved for Super Admin."
+            : "You can view directory records that support case work. Account and supplier changes are limited by role."}
+        title="Directory access"
+      />
 
       <section className="stat-grid compact">
         <Stat label="Active team" value={String(activeTeam.length)} detail={`${associateCount} associate${associateCount === 1 ? "" : "s"}`} tone="green" icon="people" />
-        <Stat label="Verifiers" value={String(verifierCount)} detail="Can act on verification queue" tone="amber" icon="verify" />
-        <Stat label="Suppliers" value={String(activeSuppliers.length)} detail="Providers and payees" tone="blue" icon="payment" />
+        <Stat label="Mission verifiers" value={String(verifierCount)} detail="Can act on verification queue" tone="amber" icon="verify" />
+        <Stat label="Verified suppliers" value={`${verifiedSuppliers.length}/${activeSuppliers.length}`} detail="Providers cleared for use" tone="blue" icon="payment" />
       </section>
 
       {error ? <div className="panel"><div className="empty-state"><Icon name="search" /><h3>Unable to load directory</h3><p>{error}</p></div></div> : null}
@@ -1250,7 +1630,7 @@ function DirectoryView({
       {!loading && !error ? (
         <section className="directory-layout">
           <div className="panel">
-            <PanelHeader title="Team members" subtitle="Employees, associates, case managers, verifiers, finance, and admins" />
+            <PanelHeader title="Team members" subtitle="Super admins, general admins, case managers, mission verifiers, and finance managers" />
             <div className="directory-list">
               {teamMembers.map((item) => (
                 <article className="directory-card" key={item.id}>
@@ -1261,7 +1641,14 @@ function DirectoryView({
                     <p>{roleLabels[item.role]} · {item.title || item.organization || "Arukah"}</p>
                     <small>{item.email}{item.phone ? ` · ${item.phone}` : ""}</small>
                   </div>
-                  <StatusPill value={item.active ? "ACTIVE" : "ARCHIVED"} />
+                  <div className="directory-card-side">
+                    <StatusPill value={item.active ? "ACTIVE" : "ARCHIVED"} />
+                    <div className="beneficiary-actions">
+                      <button onClick={() => onOpen("team", item.id)} type="button">View</button>
+                      {canManageTeam ? <button onClick={() => onOpen("team", item.id, "edit")} type="button">Edit</button> : null}
+                      {canManageTeam ? <button className="danger" onClick={() => onDeleteTeamMember(item.id)} type="button">Delete</button> : null}
+                    </div>
+                  </div>
                 </article>
               ))}
               {!teamMembers.length ? <div className="empty-state compact-empty"><Icon name="people" /><h3>No team members yet</h3><p>Register employees or associates to begin.</p></div> : null}
@@ -1280,7 +1667,14 @@ function DirectoryView({
                     <p>{item.city}, {item.region}</p>
                     <small>{item.contactName || "No contact"}{item.phone ? ` · ${item.phone}` : ""}</small>
                   </div>
-                  <StatusPill value={item.active ? "ACTIVE" : "ARCHIVED"} />
+                  <div className="directory-card-side">
+                    <StatusPill value={item.verificationStatus} />
+                    <div className="beneficiary-actions">
+                      <button onClick={() => onOpen("supplier", item.id)} type="button">View</button>
+                      {canManageSuppliers ? <button onClick={() => onOpen("supplier", item.id, "edit")} type="button">Edit</button> : null}
+                      {canManageSuppliers ? <button className="danger" onClick={() => onDeleteSupplier(item.id)} type="button">Delete</button> : null}
+                    </div>
+                  </div>
                 </article>
               ))}
               {!suppliers.length ? <div className="empty-state compact-empty"><Icon name="payment" /><h3>No suppliers yet</h3><p>Register providers used during case fulfillment.</p></div> : null}
@@ -1292,6 +1686,273 @@ function DirectoryView({
   );
 }
 
+function DirectoryDetailPanel({
+  currentRole,
+  initialMode,
+  item,
+  onClose,
+  onDeleteSupplier,
+  onDeleteTeamMember,
+  onUpdateSupplier,
+  onUpdateTeamMember,
+  onVerifySupplier,
+  type
+}: {
+  currentRole: StaffRole;
+  initialMode: "view" | "edit";
+  item: Supplier | TeamMember | null;
+  onClose: () => void;
+  onDeleteSupplier: (id: string) => Promise<void>;
+  onDeleteTeamMember: (id: string) => Promise<void>;
+  onUpdateSupplier: (id: string, input: SupplierUpdateInput, documents?: File[]) => Promise<void>;
+  onUpdateTeamMember: (id: string, input: TeamMemberUpdateInput, documents?: File[]) => Promise<void>;
+  onVerifySupplier: (id: string, input: SupplierVerificationInput) => Promise<void>;
+  type: "team" | "supplier";
+}) {
+  const [editing, setEditing] = useState(initialMode === "edit");
+  const [verifying, setVerifying] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!item) {
+    return (
+      <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+        <section className="case-dialog case-detail-panel" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+          <header className="case-dialog-header">
+            <div>
+              <span className="eyebrow">Directory</span>
+              <h2>Record not found</h2>
+              <p>This directory record may have been removed or the list is refreshing.</p>
+            </div>
+            <button aria-label="Close directory record" onClick={onClose} type="button">×</button>
+          </header>
+        </section>
+      </div>
+    );
+  }
+
+  const teamMember = type === "team" ? item as TeamMember : null;
+  const supplier = type === "supplier" ? item as Supplier : null;
+  const title = teamMember?.displayName ?? supplier?.name ?? "Directory record";
+  const canManageRecord = teamMember ? currentRole === "SUPER_ADMIN" : currentRole === "GENERAL_ADMIN";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+
+    const form = new FormData(event.currentTarget);
+    const documents = filesFromForm(form, "supportingDocuments");
+
+    try {
+      if (teamMember) {
+        await onUpdateTeamMember(teamMember.id, {
+          displayName: String(form.get("displayName")),
+          email: String(form.get("email")),
+          organization: String(form.get("organization") || "") || undefined,
+          password: String(form.get("password") || "") || undefined,
+          phone: String(form.get("phone") || "") || undefined,
+          role: String(form.get("role")) as StaffRole,
+          staffType: String(form.get("staffType")) as TeamMemberInput["staffType"],
+          title: String(form.get("title") || "") || undefined
+        }, documents);
+      } else if (supplier) {
+        await onUpdateSupplier(supplier.id, {
+          city: String(form.get("city")),
+          contactName: String(form.get("contactName") || "") || undefined,
+          email: String(form.get("email") || "") || undefined,
+          name: String(form.get("name")),
+          notes: String(form.get("notes") || "") || undefined,
+          phone: String(form.get("phone") || "") || undefined,
+          region: String(form.get("region")),
+          serviceType: String(form.get("serviceType"))
+        }, documents);
+      }
+
+      setEditing(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save directory record");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError("");
+
+    try {
+      if (teamMember) {
+        await onDeleteTeamMember(teamMember.id);
+      } else if (supplier) {
+        await onDeleteSupplier(supplier.id);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to delete directory record");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleSupplierVerification(status: SupplierVerificationInput["status"]) {
+    if (!supplier) return;
+
+    const notes =
+      window.prompt(
+        status === "VERIFIED"
+          ? "Add supplier verification notes. What was checked?"
+          : "Why is this supplier not verified?"
+      )?.trim() ?? "";
+
+    if (status === "REJECTED" && !notes) {
+      setError("Please add a reason before marking a supplier as not verified.");
+      return;
+    }
+
+    setVerifying(true);
+    setError("");
+
+    try {
+      await onVerifySupplier(supplier.id, {
+        notes: notes || undefined,
+        status
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to update supplier verification");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="case-dialog case-detail-panel" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="case-dialog-header">
+          <div>
+            <span className="eyebrow">{teamMember ? "Team member" : "Supplier"}</span>
+            <h2>{title}</h2>
+            <p>
+              {teamMember
+                ? `${roleLabels[teamMember.role]} · ${teamMember.staffType.toLowerCase()}`
+                : `${supplier!.serviceType} · ${supplier!.city}, ${supplier!.region}`}
+            </p>
+          </div>
+          <button aria-label="Close directory record" onClick={onClose} type="button">×</button>
+        </header>
+
+        {!editing ? (
+          <div className="case-detail-body">
+            <div className="case-detail-summary">
+              {teamMember ? (
+                <>
+                  <div><span>Name</span><strong>{teamMember.displayName}</strong></div>
+                  <div><span>Role</span><strong>{roleLabels[teamMember.role]}</strong></div>
+                  <div><span>Type</span><strong>{teamMember.staffType === "EMPLOYEE" ? "Employee" : "Associate"}</strong></div>
+                  <div><span>Email</span><strong>{teamMember.email}</strong></div>
+                  <div><span>Phone</span><strong>{teamMember.phone || "—"}</strong></div>
+                  <div><span>Status</span><strong>{teamMember.active ? "Active" : "Archived"}</strong></div>
+                  <div><span>Title</span><strong>{teamMember.title || "—"}</strong></div>
+                  <div><span>Organization</span><strong>{teamMember.organization || "Arukah"}</strong></div>
+                </>
+              ) : (
+                <>
+                  <div><span>Name</span><strong>{supplier!.name}</strong></div>
+                  <div><span>Service type</span><strong>{supplier!.serviceType}</strong></div>
+                  <div><span>Contact</span><strong>{supplier!.contactName || "—"}</strong></div>
+                  <div><span>Email</span><strong>{supplier!.email || "—"}</strong></div>
+                  <div><span>Phone</span><strong>{supplier!.phone || "—"}</strong></div>
+                  <div><span>Location</span><strong>{supplier!.city}, {supplier!.region}</strong></div>
+                  <div><span>Status</span><strong>{supplier!.active ? "Active" : "Archived"}</strong></div>
+                  <div><span>Verification</span><strong>{formatSupplierVerificationStatus(supplier!.verificationStatus)}</strong><small>{supplier!.verifiedAt ? `Updated ${formatUpdated(supplier!.verifiedAt)}` : "Not verified yet"}</small></div>
+                  <div className="field-full"><span>Verification notes</span><p>{supplier!.verificationNotes || "No supplier verification notes recorded."}</p></div>
+                  <div className="field-full"><span>Notes</span><p>{supplier!.notes || "No notes added."}</p></div>
+                </>
+              )}
+            </div>
+
+            {error ? <div className="form-error" role="alert">{error}</div> : null}
+
+            <footer className="case-form-actions">
+              {supplier && canManageRecord ? (
+                <>
+                  <button className="secondary-button" disabled={verifying} onClick={() => handleSupplierVerification("REJECTED")} type="button">
+                    {verifying ? "Saving…" : "Mark not verified"}
+                  </button>
+                  <button className="secondary-button" disabled={verifying} onClick={() => handleSupplierVerification("VERIFIED")} type="button">
+                    {verifying ? "Saving…" : "Verify supplier"}
+                  </button>
+                </>
+              ) : null}
+              {canManageRecord ? <button className="danger-button" disabled={deleting} onClick={handleDelete} type="button">
+                {deleting ? "Deleting…" : teamMember ? "Delete team member" : "Delete supplier"}
+              </button> : null}
+              {canManageRecord ? <button className="secondary-button" onClick={() => setEditing(true)} type="button">Edit</button> : null}
+              <button className="primary-button" onClick={onClose} type="button">Done</button>
+            </footer>
+          </div>
+        ) : (
+          <form className="case-form" onSubmit={handleSubmit}>
+            {teamMember ? (
+              <fieldset>
+                <legend>Edit team member</legend>
+                <label>Display name<input defaultValue={teamMember.displayName} minLength={2} name="displayName" required /></label>
+                <label>Email<input defaultValue={teamMember.email} name="email" required type="email" /></label>
+                <label>Phone<input defaultValue={teamMember.phone ?? ""} minLength={8} name="phone" /></label>
+                <label>Type
+                  <select defaultValue={teamMember.staffType} name="staffType" required>
+                    <option value="EMPLOYEE">Employee</option>
+                    <option value="ASSOCIATE">Associate</option>
+                  </select>
+                </label>
+                <label>Role
+                  <select defaultValue={teamMember.role} name="role" required>
+                    <option value="GENERAL_ADMIN">General admin</option>
+                    <option value="CASE_MANAGER">Case manager / submitter</option>
+                    <option value="MISSION_VERIFIER">Mission verifier</option>
+                    <option value="FINANCE_MANAGER">Finance manager</option>
+                    <option value="SUPER_ADMIN">Super admin</option>
+                  </select>
+                </label>
+                <label>Title<input defaultValue={teamMember.title ?? ""} name="title" /></label>
+                <label>Organization<input defaultValue={teamMember.organization ?? ""} name="organization" /></label>
+                <label>Password<input minLength={8} name="password" placeholder="Leave blank to keep current password" type="password" /></label>
+                <label className="field-full">Supporting documents
+                  <input accept="image/*,.pdf,application/pdf" multiple name="supportingDocuments" type="file" />
+                  <small>Upload ID proof, employment/association letters, or onboarding files as images/PDF.</small>
+                </label>
+              </fieldset>
+            ) : (
+              <fieldset>
+                <legend>Edit supplier</legend>
+                <label>Supplier / provider name<input defaultValue={supplier!.name} minLength={2} name="name" required /></label>
+                <label>Service type<input defaultValue={supplier!.serviceType} minLength={2} name="serviceType" required /></label>
+                <label>Contact person<input defaultValue={supplier!.contactName ?? ""} name="contactName" /></label>
+                <label>Email<input defaultValue={supplier!.email ?? ""} name="email" type="email" /></label>
+                <label>Phone<input defaultValue={supplier!.phone ?? ""} minLength={8} name="phone" /></label>
+                <label>City<input defaultValue={supplier!.city} minLength={2} name="city" required /></label>
+                <label>State / Region<input defaultValue={supplier!.region} minLength={2} name="region" required /></label>
+                <label className="field-full">Notes<textarea defaultValue={supplier!.notes ?? ""} name="notes" rows={4} /></label>
+                <label className="field-full">Supporting documents
+                  <input accept="image/*,.pdf,application/pdf" multiple name="supportingDocuments" type="file" />
+                  <small>Upload supplier registration, quotes, invoices, or verification files as images/PDF.</small>
+                </label>
+              </fieldset>
+            )}
+
+            {error ? <div className="form-error field-full" role="alert">{error}</div> : null}
+
+            <footer className="case-form-actions">
+              <button className="secondary-button" disabled={submitting} onClick={() => { setEditing(false); setError(""); }} type="button">Cancel</button>
+              <button className="primary-button" disabled={submitting} type="submit">{submitting ? "Saving…" : "Save changes"}</button>
+            </footer>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function DirectoryRegistrationPanel({
   mode,
   onClose,
@@ -1300,8 +1961,8 @@ function DirectoryRegistrationPanel({
 }: {
   mode: "team" | "supplier";
   onClose: () => void;
-  onCreateSupplier: (input: SupplierInput) => Promise<void>;
-  onCreateTeamMember: (input: TeamMemberInput) => Promise<void>;
+  onCreateSupplier: (input: SupplierInput, documents?: File[]) => Promise<void>;
+  onCreateTeamMember: (input: TeamMemberInput, documents?: File[]) => Promise<void>;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -1312,6 +1973,7 @@ function DirectoryRegistrationPanel({
     setError("");
 
     const form = new FormData(event.currentTarget);
+    const documents = filesFromForm(form, "supportingDocuments");
 
     try {
       if (mode === "team") {
@@ -1324,7 +1986,7 @@ function DirectoryRegistrationPanel({
           role: String(form.get("role")) as StaffRole,
           staffType: String(form.get("staffType")) as TeamMemberInput["staffType"],
           title: String(form.get("title") || "") || undefined
-        });
+        }, documents);
       } else {
         await onCreateSupplier({
           city: String(form.get("city")),
@@ -1335,7 +1997,7 @@ function DirectoryRegistrationPanel({
           phone: String(form.get("phone") || "") || undefined,
           region: String(form.get("region")),
           serviceType: String(form.get("serviceType"))
-        });
+        }, documents);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to register directory record");
@@ -1351,7 +2013,7 @@ function DirectoryRegistrationPanel({
           <div>
             <span className="eyebrow">Directory</span>
             <h2>{mode === "team" ? "Register team member" : "Register supplier"}</h2>
-            <p>{mode === "team" ? "Add employees, associates, verifiers, or finance users." : "Add a provider, supplier, payee, hospital, school, or vendor."}</p>
+            <p>{mode === "team" ? "Add super admins, general admins, case managers, mission verifiers, or finance users." : "Add a provider, supplier, payee, hospital, school, or vendor."}</p>
           </div>
           <button aria-label="Close directory registration" onClick={onClose} type="button">×</button>
         </header>
@@ -1371,8 +2033,9 @@ function DirectoryRegistrationPanel({
               </label>
               <label>Role
                 <select name="role" required>
+                  <option value="GENERAL_ADMIN">General admin</option>
                   <option value="CASE_MANAGER">Case manager / submitter</option>
-                  <option value="VERIFIER">Verifier</option>
+                  <option value="MISSION_VERIFIER">Mission verifier</option>
                   <option value="FINANCE_MANAGER">Finance manager</option>
                   <option value="SUPER_ADMIN">Super admin</option>
                 </select>
@@ -1380,6 +2043,10 @@ function DirectoryRegistrationPanel({
               <label>Title<input name="title" placeholder="Program Associate" /></label>
               <label>Organization<input name="organization" placeholder="Arukah / Partner org" /></label>
               <label>Password<input minLength={8} name="password" placeholder="Optional login password" type="password" /></label>
+              <label className="field-full">Supporting documents
+                <input accept="image/*,.pdf,application/pdf" multiple name="supportingDocuments" type="file" />
+                <small>Upload ID proof, employment/association letters, or onboarding files as images/PDF.</small>
+              </label>
             </fieldset>
           ) : (
             <fieldset>
@@ -1392,6 +2059,10 @@ function DirectoryRegistrationPanel({
               <label>City<input minLength={2} name="city" required /></label>
               <label>State / Region<input minLength={2} name="region" required /></label>
               <label className="field-full">Notes<textarea name="notes" rows={4} /></label>
+              <label className="field-full">Supporting documents
+                <input accept="image/*,.pdf,application/pdf" multiple name="supportingDocuments" type="file" />
+                <small>Upload supplier registration, quotes, invoices, or verification files as images/PDF.</small>
+              </label>
             </fieldset>
           )}
 
@@ -1448,6 +2119,7 @@ function CaseDetailPanel({
 
   const selectedCase = caseRecord;
   const requestedAmount = Number(selectedCase.requestedAmountMinor) / 100;
+  const canOverrideWorkflow = session.user.role === "SUPER_ADMIN";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1457,15 +2129,20 @@ function CaseDetailPanel({
     const form = new FormData(event.currentTarget);
 
     try {
-      const updated = await updateCase(session, selectedCase.id, {
+      const updateInput: Parameters<typeof updateCase>[2] = {
         title: String(form.get("title")),
         category: String(form.get("category")),
         description: String(form.get("description")),
         requestedAmountMinor: Math.round(Number(form.get("amount")) * 100),
         currency: String(form.get("currency") || "INR").toUpperCase(),
-        urgency: String(form.get("urgency")) as CreatedCase["urgency"],
-        stage: String(form.get("stage")) as CreatedCase["stage"]
-      });
+        urgency: String(form.get("urgency")) as CreatedCase["urgency"]
+      };
+
+      if (canOverrideWorkflow) {
+        updateInput.stage = String(form.get("stage")) as CreatedCase["stage"];
+      }
+
+      const updated = await updateCase(session, selectedCase.id, updateInput);
 
       onUpdated(updated);
       setEditing(false);
@@ -1558,19 +2235,28 @@ function CaseDetailPanel({
                   <option value="URGENT">Urgent</option>
                 </select>
               </label>
-              <label>Stage
-                <select defaultValue={caseRecord.stage} name="stage">
-                  <option value="SUBMITTED">Submitted</option>
-                  <option value="VERIFICATION">Verification</option>
-                  <option value="APPROVED">Approval</option>
-                  <option value="PROVIDER_SELECTION">Provider selection</option>
-                  <option value="PAYMENT">Payment</option>
-                  <option value="IMPACT">Impact</option>
-                  <option value="CLOSED">Closed</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="ON_HOLD">On hold</option>
-                </select>
-              </label>
+              {canOverrideWorkflow ? (
+                <label>Stage override
+                  <select defaultValue={caseRecord.stage} name="stage">
+                    <option value="SUBMITTED">Submitted</option>
+                    <option value="VERIFICATION">Verification</option>
+                    <option value="APPROVED">Approval</option>
+                    <option value="PROVIDER_SELECTION">Provider selection</option>
+                    <option value="PAYMENT">Payment</option>
+                    <option value="IMPACT">Impact</option>
+                    <option value="CLOSED">Closed</option>
+                    <option value="REJECTED">Rejected</option>
+                    <option value="ON_HOLD">On hold</option>
+                  </select>
+                  <small>Super Admin only: move a case from one workflow status to another.</small>
+                </label>
+              ) : (
+                <div className="readonly-field">
+                  <span>Stage</span>
+                  <strong>{formatStage(caseRecord.stage)}</strong>
+                  <small>Only Super Admin can override workflow status directly.</small>
+                </div>
+              )}
               <label className="field-full">Description<textarea defaultValue={caseRecord.description} minLength={20} name="description" required rows={5} /></label>
             </fieldset>
 
@@ -1607,6 +2293,11 @@ function BeneficiariesView({
       <PageHeading eyebrow="People and families" title="Beneficiaries" description="Private records for the people Arukah serves.">
         <button className="primary-button" onClick={onCreate} type="button"><Icon name="plus" /> New beneficiary</button>
       </PageHeading>
+      <UserMessage
+        icon="people"
+        message="Create or update beneficiary profiles before submitting cases. Keep supporting documents attached to the person record when they prove identity, address, or eligibility."
+        title="Beneficiary record guidance"
+      />
       {error ? <div className="panel"><div className="empty-state"><Icon name="search" /><h3>Unable to load beneficiaries</h3><p>{error}</p></div></div> : null}
       {loading ? <div className="panel"><div className="empty-state"><Icon name="clock" /><h3>Loading beneficiaries…</h3><p>Pulling the latest records from the API.</p></div></div> : null}
       {!loading && !error && !items.length ? <div className="panel"><div className="empty-state"><Icon name="people" /><h3>No beneficiaries found</h3><p>Create a beneficiary or adjust your search.</p></div></div> : null}
@@ -1650,7 +2341,7 @@ function BeneficiaryDetailPanel({
   initialMode: "view" | "edit" | "create";
   onArchive: (id: string) => void;
   onClose: () => void;
-  onSaved: (beneficiary: Beneficiary) => void;
+  onSaved: (beneficiary: Beneficiary, documents?: File[]) => Promise<void>;
   session: AuthSession;
   states: IndiaState[];
   tamilNaduCities: IndiaCity[];
@@ -1669,6 +2360,7 @@ function BeneficiaryDetailPanel({
     setError("");
 
     const form = new FormData(event.currentTarget);
+    const documents = filesFromForm(form, "supportingDocuments");
     const input = {
       preferredName: String(form.get("preferredName")),
       legalName: String(form.get("legalName")),
@@ -1683,7 +2375,7 @@ function BeneficiaryDetailPanel({
       const saved = creating
         ? await createBeneficiary(session, input)
         : await updateBeneficiary(session, beneficiary!.id, input);
-      onSaved(saved);
+      await onSaved(saved, documents);
       setEditing(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save beneficiary");
@@ -1762,6 +2454,10 @@ function BeneficiaryDetailPanel({
               ) : (
                 <label>City<input defaultValue={beneficiary?.city ?? ""} name="city" required /></label>
               )}
+              <label className="field-full">Supporting documents
+                <input accept="image/*,.pdf,application/pdf" multiple name="supportingDocuments" type="file" />
+                <small>Upload ID proof, income proof, address proof, or family documents as images/PDF.</small>
+              </label>
             </fieldset>
             {error ? <div className="form-error field-full" role="alert">{error}</div> : null}
             <footer className="case-form-actions">
@@ -2054,6 +2750,13 @@ function QueueView({
           <Icon name="clock" /> Refresh
         </button>
       </PageHeading>
+      <UserMessage
+        icon={verification ? "verify" : "payment"}
+        message={verification
+          ? "Review the case evidence, record the recommendation, and submit the verification outcome. Approved cases move forward for payment preparation."
+          : "Confirm payee and reference details before recording payment. Once submitted, the case moves to impact follow-up."}
+        title={verification ? "Verification workflow message" : "Payment workflow message"}
+      />
       <section className="stat-grid compact">
         <Stat
           label={verification ? "In verification" : "Ready for payment"}
@@ -2106,7 +2809,7 @@ function QueueView({
                   <StatusPill value={formatUrgency(item.urgency)} />
                 </div>
                 <div className="queue-card-meta">
-                  <span>{verification ? "Verifier" : "Case manager"}</span>
+                  <span>{verification ? "Mission verifier" : "Case manager"}</span>
                   <strong>{verification ? item.verifier?.displayName ?? "Unassigned" : item.caseManager?.displayName ?? "Unassigned"}</strong>
                 </div>
                 <div className="queue-card-meta">
@@ -2169,6 +2872,11 @@ function ReportsView({
   return (
     <>
       <PageHeading eyebrow="Pilot learning" title="Reports" description="Operational visibility grounded in live case, beneficiary, directory, and workflow records." />
+      <UserMessage
+        icon="report"
+        message="Use reports to spot queue pressure, payment exposure, and pilot progress. These numbers come from live case, beneficiary, supplier, and team records."
+        title="Reading reports"
+      />
       <section className="stat-grid compact">
         <Stat label="Total cases" value={String(cases.length)} detail={loading ? "Loading…" : `${activeCases.length} active right now`} tone="green" icon="folder" />
         <Stat label="Requested total" value={formatMoney(String(requestedTotal), "INR")} detail={`${formatMoney(String(approvedTotal), "INR")} approved`} tone="blue" icon="payment" />
@@ -2247,6 +2955,28 @@ function PageHeading({ eyebrow, title, description, children }: { eyebrow: strin
   return <header className="page-heading"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{children ? <div className="heading-actions">{children}</div> : null}</header>;
 }
 
+function UserMessage({
+  icon,
+  message,
+  title,
+  tone = "info"
+}: {
+  icon: IconName;
+  message: string;
+  title: string;
+  tone?: "info" | "success" | "warning";
+}) {
+  return (
+    <aside className={`user-message ${tone}`} role="note">
+      <div className="user-message-icon"><Icon name={icon} /></div>
+      <div>
+        <strong>{title}</strong>
+        <p>{message}</p>
+      </div>
+    </aside>
+  );
+}
+
 function PanelHeader({ title, subtitle, action, onAction }: { title: string; subtitle: string; action?: string; onAction?: () => void }) {
   return <div className="panel-header"><div><h2>{title}</h2><p>{subtitle}</p></div>{action ? <button onClick={onAction} type="button">{action} <Icon name="arrow" /></button> : null}</div>;
 }
@@ -2304,8 +3034,16 @@ function StatusPill({ value }: { value: string }) {
     .toLowerCase()
     .replace(/_/g, " ")
     .replace(/^\w/, (letter) => letter.toUpperCase());
+  const tone =
+    value === "ACTIVE" || value === "Active" || value === "VERIFIED"
+      ? "active"
+      : value === "REJECTED"
+        ? "rejected"
+        : value === "PENDING"
+          ? "pending"
+          : "";
 
-  return <span className={`status-pill ${value === "ACTIVE" || value === "Active" ? "active" : ""}`}>{label}</span>;
+  return <span className={`status-pill ${tone}`}>{label}</span>;
 }
 
 function FocusItem({ icon, tone, title, detail }: { icon: IconName; tone: string; title: string; detail: string }) {

@@ -2,7 +2,12 @@ export type AuthenticatedUser = {
   id: string;
   email: string;
   displayName: string;
-  role: "SUPER_ADMIN" | "CASE_MANAGER" | "VERIFIER" | "FINANCE_MANAGER";
+  role:
+    | "SUPER_ADMIN"
+    | "GENERAL_ADMIN"
+    | "CASE_MANAGER"
+    | "MISSION_VERIFIER"
+    | "FINANCE_MANAGER";
 };
 
 export type AccessTokenPayload = {
